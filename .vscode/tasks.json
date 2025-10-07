@@ -1,62 +1,108 @@
 {
 	"version": "2.0.0",
-	"type": "shell",
-	"problemMatcher": [
-		"$go"
-	],
 	"tasks": [
 		{
 			"label": "go mod tidy",
 			"type": "shell",
 			"command": "go mod tidy",
 			"presentation": {
-				"echo": true,
 				"reveal": "silent",
-				"focus": false,
 				"panel": "shared",
 				"showReuseMessage": false,
 				"clear": true
 			},
 			"problemMatcher": [
 				"$go"
-			],
+			]
 		},
 		{
-			"label": "Build Release",
+			"label": "Build asm68 (Release)",
+			"type": "shell",
 			"command": "go",
 			"args": [
 				"build",
-				"-ldflags",
-				"\"-w -s\""
+				"-o",
+				"bin/asm68",
+				"-ldflags=-w -s",
+				"./cmd/asm68"
 			],
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
 			"presentation": {
-				"echo": true,
-				"reveal": "silent",
-				"focus": false,
+				"reveal": "never",
 				"panel": "shared",
 				"showReuseMessage": false,
 				"clear": true
-			}
+			},
+			"problemMatcher": [
+				"$go"
+			]
 		},
 		{
-			"label": "Build Debug",
+			"label": "Build asm68 (Debug)",
+			"type": "shell",
 			"command": "go",
 			"args": [
-				"build"
+				"build",
+				"-o",
+				"bin/asm68",
+				"./cmd/asm68"
 			],
 			"group": "build",
 			"presentation": {
-				"echo": true,
-				"reveal": "silent",
-				"focus": false,
+				"reveal": "never",
 				"panel": "shared",
 				"showReuseMessage": false,
 				"clear": true
-			}
+			},
+			"problemMatcher": [
+				"$go"
+			]
+		},
+		{
+			"label": "Build dis68 (Release)",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"build",
+				"-o",
+				"bin/dis68",
+				"-ldflags=-w -s",
+				"./cmd/dis68"
+			],
+			"group": "build",
+			"presentation": {
+				"reveal": "never",
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"problemMatcher": [
+				"$go"
+			]
+		},
+		{
+			"label": "Build dis68 (Debug)",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"build",
+				"-o",
+				"bin/dis68",
+				"./cmd/dis68"
+			],
+			"group": "build",
+			"presentation": {
+				"reveal": "never",
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"problemMatcher": [
+				"$go"
+			]
 		}
 	]
 }
