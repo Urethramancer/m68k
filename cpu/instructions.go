@@ -22,6 +22,15 @@ const (
 	OPAND                 = 0xC000 // AND
 	OPOR                  = 0x8000 // OR
 	OPEOR                 = 0xB100 // EOR
+	OPANDI                = 0x0200 // ANDI
+	OPORI                 = 0x0000 // ORI
+	OPEORI                = 0x0A00 // EORI
+	OPANDItoCCR           = 0x023C // ANDI to CCR
+	OPORItoCCR            = 0x003C // ORI to CCR
+	OPEORItoCCR           = 0x0A3C // EORI to CCR
+	OPANDItoSR            = 0x027C // ANDI to SR (privileged)
+	OPORItoSR             = 0x007C // ORI to SR (privileged)
+	OPEORItoSR            = 0x0A7C // EORI to SR (privileged)
 	OPNOT                 = 0x4600 // NOT
 	OPCLR                 = 0x4200 // CLR
 	OPTST                 = 0x4A00 // TST
@@ -99,17 +108,6 @@ const (
 	OPRTR     = 0x4E77 // RTR
 	OPTAS     = 0x4AC0 // TAS
 	OPEXG     = 0xC100 // EXG (base)
-
-	// Logical instructions with immediate variants
-	OPANDI      = 0x0200 // ANDI
-	OPORI       = 0x0000 // ORI
-	OPEORI      = 0x0A00 // EORI
-	OPANDItoCCR = 0x023C // ANDI to CCR
-	OPORItoCCR  = 0x003C // ORI to CCR
-	OPEORItoCCR = 0x0A3C // EORI to CCR
-	OPANDItoSR  = 0x027C // ANDI to SR (privileged)
-	OPORItoSR   = 0x007C // ORI to SR (privileged)
-	OPEORItoSR  = 0x0A7C // EORI to SR (privileged)
 
 	// Conditional Instructions
 	OPScc  = 0x50C0 // Scc (base, condition code OR'd)
