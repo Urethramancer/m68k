@@ -13,3 +13,7 @@ rts
 data:
 .dc.b #10
 .ds.b 10
+
+ex:
+addq #5,d0
+rts
