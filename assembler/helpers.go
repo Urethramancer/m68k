@@ -96,7 +96,7 @@ func encodeEA(op Operand) (uint16, []uint16, error) {
 				exts = append(exts, 0)
 			}
 
-		case cpu.ModePCIndex: // (d8,PC,Xn)
+		case cpu.RegPCIndex: // (d8,PC,Xn)
 			word = (cpu.ModeOther << 3) | 3 // 111 011
 			exts = append(exts, op.ExtensionWords...)
 

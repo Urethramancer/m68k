@@ -4,6 +4,14 @@ import (
 	"encoding/binary"
 )
 
+// IsLittleEndianHost checks if the host system is little-endian.
+func IsLittleEndianHost() bool {
+	var x uint16 = 1
+	b := [2]byte{}
+	binary.LittleEndian.PutUint16(b[:], x)
+	return b[0] == 1
+}
+
 // WordsToBytes converts a slice of 16-bit words into a byte slice in big-endian format.
 // This is the standard serialization format for M68k machine code.
 func WordsToBytes(words []uint16) []byte {

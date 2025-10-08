@@ -39,7 +39,7 @@ const (
 	RegPCDisp uint16 = 2
 
 	// 011 — Program counter with index: (d8,PC,Xn)
-	ModePCIndex uint16 = 3
+	RegPCIndex uint16 = 3
 
 	// 100 — Immediate: #<data>
 	RegImmediate uint16 = 4
@@ -50,7 +50,7 @@ const (
 	ModeAbsShort   uint16 = 0 // (xxx).W
 	ModeAbsLong    uint16 = 1 // (xxx).L
 	ModePCRelative uint16 = 2 // (d16,PC)
-	ModeImmediate  uint16 = 4 // #<data>)
+	ModeImmediate  uint16 = 4 // #<data>
 )
 
 // Register numbers

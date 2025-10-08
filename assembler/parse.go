@@ -242,7 +242,7 @@ func parseAddressIndex(m []string, asm *Assembler) (Operand, error) {
 
 // parsePCRelIndex handles (d8,PC,Xn)
 func parsePCRelIndex(m []string, asm *Assembler) (Operand, error) {
-	op := Operand{Raw: m[0], Mode: cpu.ModeOther, Register: cpu.ModePCIndex}
+	op := Operand{Raw: m[0], Mode: cpu.ModeOther, Register: cpu.RegPCIndex}
 	var ext uint16
 
 	var disp int64

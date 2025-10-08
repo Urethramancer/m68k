@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
+	"github.com/Urethramancer/m68k/cpu"
 	"github.com/Urethramancer/m68k/disassembler"
 )
 
@@ -20,26 +20,35 @@ func main() {
 		outputFile = os.Args[2]
 	}
 
-	code, err := ioutil.ReadFile(inputFile)
+	code, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading input file: %v\n", err)
 		os.Exit(1)
 	}
 
-	disasm, err := disassembler.Disassemble(code)
+	// Ensure M68K big-endian order
+	if cpu.IsLittleEndianHost() {
+		for i := 0; i+1 < len(code); i += 2 {
+			code[i], code[i+1] = code[i+1], code[i]
+		}
+	}
+
+	// Perform unified full disassembly
+	text, err := disassembler.Disassemble(code)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Disassembly error: %v\n", err)
 		os.Exit(1)
 	}
 
 	if outputFile == "" {
-		fmt.Println(disasm)
-	} else {
-		err = os.WriteFile(outputFile, []byte(disasm), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Disassembly written to %s\n", outputFile)
+		fmt.Print(text)
+		return
 	}
+
+	// Write to file
+	if err := os.WriteFile(outputFile, []byte(text), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Disassembly written to %s\n", outputFile)
 }
