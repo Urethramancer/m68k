@@ -28,7 +28,7 @@
 			],
 			"group": {
 				"kind": "build",
-				"isDefault": true
+				"isDefault": false
 			},
 			"presentation": {
 				"reveal": "never",
@@ -103,6 +103,19 @@
 			"problemMatcher": [
 				"$go"
 			]
+		},
+		{
+			"label": "Build all (Release)",
+			"type": "shell",
+			"dependsOn": [
+				"Build asm68 (Release)",
+				"Build dis68 (Release)"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
 		}
 	]
 }
