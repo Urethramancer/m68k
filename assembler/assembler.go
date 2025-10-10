@@ -252,12 +252,11 @@ func (asm *Assembler) generateInstructionCode(n *Node, pc uint32) ([]uint16, err
 	// Special-case: operations involving SR/CCR/USP must go through assembleStatus.
 	// e.g. MOVE <ea>, SR  ; MOVE SR, <ea> ; ANDI #<val>, SR ; MOVE <ea>, USP ; MOVE USP, <ea>
 	if len(operands) > 0 {
-		lastOpRaw := operands[len(operands)-1].Raw
-		if strings.EqualFold(lastOpRaw, "sr") || strings.EqualFold(lastOpRaw, "ccr") || strings.EqualFold(lastOpRaw, "usp") {
-			return assembleStatus(n.Mnemonic, n.Operands, asm)
-		}
-		if len(operands) > 1 && strings.EqualFold(operands[0].Raw, "sr") {
-			return assembleStatus(n.Mnemonic, n.Operands, asm)
+		for i := range operands {
+			raw := strings.ToLower(strings.TrimSpace(operands[i].Raw))
+			if raw == "sr" || raw == "ccr" || raw == "usp" {
+				return assembleStatus(n.Mnemonic, n.Operands, asm)
+			}
 		}
 	}
 

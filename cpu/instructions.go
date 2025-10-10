@@ -87,7 +87,7 @@ const (
 	OPMOVEFromSR  = 0x40C0 // MOVE from SR
 	OPMOVEToSR    = 0x46C0 // MOVE to SR (privileged)
 	OPMOVEToCCR   = 0x44C0 // MOVE to CCR
-	OPMOVEFromUSP = 0x4E6A // MOVE from USP
+	OPMOVEFromUSP = 0x4E68 // MOVE from USP
 	OPMOVEToUSP   = 0x4E60 // MOVE to USP
 
 	// Address Calculation and Stack Instructions
