@@ -35,7 +35,7 @@ func (n *Node) GetSize(asm *Assembler, pc uint32) (uint32, error) {
 		return 0, nil
 
 	case NodeDirective:
-		return asm.getDirectiveSize(n)
+		return asm.getDirectiveSize(n, pc)
 
 	case NodeInstruction:
 		// --- Quick handling for special CPU registers (SR/CCR/USP) ---

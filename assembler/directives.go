@@ -8,61 +8,85 @@ import (
 )
 
 // getDirectiveSize calculates the byte size of a directive for the sizing pass.
-func (asm *Assembler) getDirectiveSize(n *Node) (uint32, error) {
-	directive := strings.ToLower(n.Parts[0])
+//
+// Note: pc is passed so .even can be sized correctly.
+func (asm *Assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
+	// normalize directive: lowercase, drop an optional leading dot
+	raw := strings.ToLower(n.Parts[0])
+	dir := strings.TrimPrefix(raw, ".")
 
-	switch directive {
-	case ".org", ".equ":
-		return 0, nil // These directives occupy no space in output.
+	switch dir {
+	case "org", "equ":
+		return 0, nil
 
-	case ".dc.b", ".dc.w", ".dc.l":
+	case "even":
+		// if current pc is odd, .even emits one padding byte
+		if pc%2 != 0 {
+			return 1, nil
+		}
+		return 0, nil
+
+	case "dc.b", "dc.w", "dc.l":
 		if len(n.Parts) < 2 {
-			return 0, fmt.Errorf("%s requires at least one value", directive)
+			return 0, fmt.Errorf("%s requires at least one value", n.Parts[0])
 		}
 		values := strings.Join(n.Parts[1:], " ")
-		return calculateDcSize(directive, values, asm)
+		return calculateDcSize(dir, values, asm)
 
-	case ".ds.b", ".ds.w", ".ds.l":
+	case "ds.b", "ds.w", "ds.l":
 		if len(n.Parts) != 2 {
-			return 0, fmt.Errorf("%s requires a single count argument", directive)
+			return 0, fmt.Errorf("%s requires a single count argument", n.Parts[0])
 		}
 		count, err := parseConstant(n.Parts[1], asm)
 		if err != nil {
-			return 0, fmt.Errorf("invalid count for %s: %v", directive, err)
+			return 0, fmt.Errorf("invalid count for %s: %v", n.Parts[0], err)
 		}
-		elementSize := getElementSize(directive)
+		elementSize := getElementSize(dir)
 		return uint32(count) * elementSize, nil
 
 	default:
-		return 0, fmt.Errorf("unknown directive: %s", directive)
+		return 0, fmt.Errorf("unknown directive: %s", n.Parts[0])
 	}
 }
 
 // generateDirectiveCode generates the binary data for assembler directives.
+// Returns 16-bit words (big-endian). .even and .org/.equ return nil (handled by assemble loop).
 func (asm *Assembler) generateDirectiveCode(n *Node) ([]uint16, error) {
-	directive := strings.ToLower(n.Parts[0])
+	// Normalize directive name once: lowercase, no leading dot.
+	raw := strings.ToLower(n.Parts[0])
+	dir := strings.TrimPrefix(raw, ".")
 
-	switch directive {
-	case ".org", ".equ":
-		return nil, nil // No data emitted.
+	switch dir {
+	case "org", "equ":
+		return nil, nil
 
-	case ".dc.b", ".dc.w", ".dc.l":
+	case "even":
+		// .even is handled in the assembly loop so we return nil here.
+		return nil, nil
+
+	case "dc.b", "dc.w", "dc.l":
+		if len(n.Parts) < 2 {
+			return nil, fmt.Errorf("%s requires at least one value", n.Parts[0])
+		}
 		values := strings.Join(n.Parts[1:], " ")
-		return assembleDc(directive, values, asm)
+		// pass the normalized directive (e.g. "dc.b") and the assembler for symbols.
+		return assembleDc(dir, values, asm)
 
-	case ".ds.b", ".ds.w", ".ds.l":
+	case "ds.b", "ds.w", "ds.l":
+		if len(n.Parts) != 2 {
+			return nil, fmt.Errorf("%s requires a single count argument", n.Parts[0])
+		}
 		count, err := parseConstant(n.Parts[1], asm)
 		if err != nil {
-			return nil, fmt.Errorf("invalid count for %s: %v", directive, err)
+			return nil, fmt.Errorf("invalid count for %s: %v", n.Parts[0], err)
 		}
-		elementSize := getElementSize(directive)
+		elementSize := getElementSize(dir)
 		byteSize := uint32(count) * elementSize
-		// Pad to even byte boundary (assembler emits words)
 		wordSize := (byteSize + 1) / 2
 		return make([]uint16, wordSize), nil
 
 	default:
-		return nil, fmt.Errorf("unknown directive: %s", directive)
+		return nil, fmt.Errorf("unknown directive: %s", n.Parts[0])
 	}
 }
 
@@ -71,18 +95,26 @@ func calculateDcSize(directive, values string, asm *Assembler) (uint32, error) {
 	elementSize := getElementSize(directive)
 	var size uint32
 
-	// Handle string literal data for .dc.b
-	if elementSize == 1 && strings.Contains(values, "\"") {
+	// string handling for .dc.b
+	if elementSize == 1 && (strings.Contains(values, "\"") || strings.Contains(values, "'")) {
 		inQuote := false
+		var quoteChar rune
 		for _, c := range values {
-			if c == '"' {
-				inQuote = !inQuote
-			} else if inQuote {
-				size++
+			switch c {
+			case '\'', '"':
+				if inQuote && c == quoteChar {
+					inQuote = false
+				} else if !inQuote {
+					inQuote = true
+					quoteChar = c
+				}
+			default:
+				if inQuote {
+					size++
+				}
 			}
 		}
 	} else {
-		// Handle comma-separated numeric constants
 		for _, p := range strings.Split(values, ",") {
 			if trimmed := strings.TrimSpace(p); trimmed != "" {
 				size += elementSize
@@ -90,27 +122,70 @@ func calculateDcSize(directive, values string, asm *Assembler) (uint32, error) {
 		}
 	}
 
-	// Align to the next word boundary so size matches generation pass.
-	return (size + 1) &^ 1, nil
+	// align to word boundary
+	if size%2 != 0 {
+		size++
+	}
+	return size, nil
 }
 
-// assembleDc generates machine data for .dc directives (.dc.b/.dc.w/.dc.l).
+// assembleDc generates machine data for DC.B/DC.W/DC.L.
+// It always returns words in Motorola big-endian order, regardless of host endianness.
 func assembleDc(directive, values string, asm *Assembler) ([]uint16, error) {
 	elementSize := int(getElementSize(directive))
-	var bytes []byte
+	var bytesBuf []byte
 
-	// Handle strings for .dc.b
-	if elementSize == 1 && strings.Contains(values, "\"") {
+	// --- 1. Parse all the values into bytes in Motorola order ---
+	// Allow mixing strings and numeric constants for DC.B
+	if elementSize == 1 && (strings.Contains(values, "'") || strings.Contains(values, "\"")) {
 		inQuote := false
+		var quoteChar rune
+		token := ""
 		for _, c := range values {
-			if c == '"' {
-				inQuote = !inQuote
-			} else if inQuote {
-				bytes = append(bytes, byte(c))
+			switch c {
+			case '\'', '"':
+				if inQuote && c == quoteChar {
+					for i := 0; i < len(token); i++ {
+						bytesBuf = append(bytesBuf, token[i])
+					}
+					token = ""
+					inQuote = false
+				} else if !inQuote {
+					inQuote = true
+					quoteChar = c
+				} else {
+					token += string(c)
+				}
+			case ',':
+				if !inQuote {
+					token = strings.TrimSpace(token)
+					if token != "" {
+						val, err := parseConstant(token, asm)
+						if err != nil {
+							return nil, fmt.Errorf("invalid constant '%s': %v", token, err)
+						}
+						bytesBuf = append(bytesBuf, byte(val))
+					}
+					token = ""
+				} else {
+					token += string(c)
+				}
+			default:
+				token += string(c)
+			}
+		}
+		if token != "" && !inQuote {
+			token = strings.TrimSpace(token)
+			if token != "" {
+				val, err := parseConstant(token, asm)
+				if err != nil {
+					return nil, fmt.Errorf("invalid constant '%s': %v", token, err)
+				}
+				bytesBuf = append(bytesBuf, byte(val))
 			}
 		}
 	} else {
-		// Handle numeric data
+		// Numeric only
 		for _, p := range strings.Split(values, ",") {
 			trimmed := strings.TrimSpace(p)
 			if trimmed == "" {
@@ -120,35 +195,49 @@ func assembleDc(directive, values string, asm *Assembler) ([]uint16, error) {
 			if err != nil {
 				return nil, fmt.Errorf("invalid constant '%s': %v", trimmed, err)
 			}
+
 			switch elementSize {
 			case 1:
-				bytes = append(bytes, byte(val))
+				bytesBuf = append(bytesBuf, byte(val))
 			case 2:
-				bytes = append(bytes, byte(val>>8), byte(val))
+				// Motorola order: high byte first
+				bytesBuf = append(bytesBuf, byte(val>>8), byte(val))
 			case 4:
-				bytes = append(bytes, byte(val>>24), byte(val>>16), byte(val>>8), byte(val))
+				// Motorola order: highest byte first
+				bytesBuf = append(bytesBuf, byte(val>>24), byte(val>>16), byte(val>>8), byte(val))
 			}
 		}
 	}
 
-	// Ensure even byte count for word alignment
-	if len(bytes)%2 != 0 {
-		bytes = append(bytes, 0)
+	// --- 2. Always align to even length ---
+	if len(bytesBuf)%2 != 0 {
+		bytesBuf = append(bytesBuf, 0)
 	}
 
-	return cpu.BytesToWords(bytes), nil
+	// --- 3. If host is little-endian, swap pairs before converting ---
+	if cpu.IsLittleEndianHost() {
+		for i := 0; i < len(bytesBuf); i += 2 {
+			if i+1 < len(bytesBuf) {
+				bytesBuf[i], bytesBuf[i+1] = bytesBuf[i+1], bytesBuf[i]
+			}
+		}
+	}
+
+	// --- 4. Convert bytes to words in big-endian order ---
+	return cpu.BytesToWords(bytesBuf), nil
 }
 
 // getElementSize returns element size in bytes for data-storage directives.
 func getElementSize(directive string) uint32 {
-	switch directive {
-	case ".dc.b", ".ds.b":
+	// directive is normalized without leading dot (e.g. "dc.b")
+	switch strings.ToLower(strings.TrimPrefix(directive, ".")) {
+	case "dc.b", "ds.b", "dcb", "dsb":
 		return 1
-	case ".dc.w", ".ds.w":
+	case "dc.w", "ds.w", "dcw", "dsw":
 		return 2
-	case ".dc.l", ".ds.l":
+	case "dc.l", "ds.l", "dcl", "dsl":
 		return 4
 	default:
-		return 1 // fallback (should never happen)
+		return 1
 	}
 }

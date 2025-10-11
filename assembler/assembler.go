@@ -9,8 +9,9 @@ import (
 
 // Assembler holds the state for the assembly process.
 type Assembler struct {
-	symbols map[string]int64
-	labels  map[string]uint32
+	symbols   map[string]int64
+	labels    map[string]uint32
+	outputPos uint32
 }
 
 // New creates a new Assembler instance.
@@ -30,6 +31,7 @@ func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
 		return nil, fmt.Errorf("parsing error: %w", err)
 	}
 
+	asm.outputPos = 0
 	// Pass: resolve label addresses and node sizes until stable.
 	for {
 		pc := baseAddress
@@ -42,12 +44,16 @@ func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
 				}
 				continue
 			}
-			if n.Type == NodeDirective && len(n.Parts) > 1 && n.Parts[0] == ".org" {
+
+			// handle .org in sizing pass so subsequent sizes/labels use the correct PC
+			if n.Type == NodeDirective && len(n.Parts) > 1 &&
+				(strings.EqualFold(n.Parts[0], "org") || strings.EqualFold(n.Parts[0], ".org")) {
 				addr, err := parseConstant(n.Parts[1], asm)
 				if err != nil {
 					return nil, err
 				}
 				pc = uint32(addr)
+				asm.outputPos = pc - baseAddress
 				continue
 			}
 
@@ -56,46 +62,78 @@ func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error calculating size for '%v': %w", n.Parts, err)
 			}
+
 			if oldSize != size {
 				changed = true
 			}
+
 			n.Size = size
 			pc += size
 		}
+
 		if !changed {
 			break
 		}
 	}
 
-	// Generate machine code.
-	var machineCode []uint16
+	// Generate machine code as bytes (so we can emit single-byte .even padding)
+	var out []byte
 	pc := baseAddress
+	asm.outputPos = pc - baseAddress
+
 	for _, n := range nodes {
-		var code []uint16
-		var err error
-
-		switch n.Type {
-		case NodeLabel:
-			// Labels do not emit code.
+		// Labels emit nothing
+		if n.Type == NodeLabel {
 			continue
-		case NodeDirective:
-			code, err = asm.generateDirectiveCode(n)
-			if len(n.Parts) > 1 && n.Parts[0] == ".org" {
-				addr, _ := parseConstant(n.Parts[1], asm)
-				pc = uint32(addr)
-			}
-		case NodeInstruction:
-			code, err = asm.generateInstructionCode(n, pc)
 		}
 
-		if err != nil {
-			return nil, fmt.Errorf("error generating code for '%v': %w", n.Parts, err)
+		// .org handling before generation
+		if n.Type == NodeDirective && len(n.Parts) > 1 &&
+			(strings.EqualFold(n.Parts[0], "org") || strings.EqualFold(n.Parts[0], ".org")) {
+			addr, _ := parseConstant(n.Parts[1], asm)
+			pc = uint32(addr)
+			asm.outputPos = pc - baseAddress
+			continue
 		}
-		machineCode = append(machineCode, code...)
-		pc += n.Size
+
+		// Special-case even in the generator so we can emit a single padding byte when needed
+		dirName := ""
+		if n.Type == NodeDirective {
+			dirName = strings.TrimPrefix(strings.ToLower(n.Parts[0]), ".")
+		}
+		if dirName == "even" {
+			if asm.outputPos%2 != 0 {
+				out = append(out, 0x00)
+				asm.outputPos++
+				pc = baseAddress + asm.outputPos
+			}
+			// .even emits at most that one byte; nothing else to do for this node
+			continue
+		}
+
+		var words []uint16
+		var genErr error
+
+		if n.Type == NodeDirective {
+			words, genErr = asm.generateDirectiveCode(n)
+		} else { // NodeInstruction
+			words, genErr = asm.generateInstructionCode(n, pc)
+		}
+
+		if genErr != nil {
+			return nil, fmt.Errorf("error generating code for '%v': %w", n.Parts, genErr)
+		}
+
+		// Append produced words as bytes (big-endian) to out
+		if len(words) > 0 {
+			bytes := cpu.WordsToBytes(words)
+			out = append(out, bytes...)
+			asm.outputPos += uint32(len(bytes))
+			pc = baseAddress + asm.outputPos
+		}
 	}
 
-	return cpu.WordsToBytes(machineCode), nil
+	return out, nil
 }
 
 // parseLines converts raw source lines into a slice of Node objects.
@@ -140,7 +178,7 @@ func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 		directiveCheck := strings.ToLower(mnemonic)
 		directiveCheck = strings.TrimPrefix(directiveCheck, ".")
 		switch directiveCheck {
-		case "dc.b", "dc.w", "dc.l", "ds.b", "ds.w", "ds.l", "org", "equ":
+		case "dc.b", "dc.w", "dc.l", "ds.b", "ds.w", "ds.l", "org", "equ", "even":
 			nodes = append(nodes, &Node{Type: NodeDirective, Parts: nodeParts})
 			continue
 		}
