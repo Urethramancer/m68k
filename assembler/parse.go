@@ -38,13 +38,20 @@ var (
 	reAddressPreDec   = regexp.MustCompile(`(?i)^-\(a([0-7])\)$`)
 	reAddressDisp     = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]+)\(a([0-7])\)$`)
 	reImmediate       = regexp.MustCompile(`(?i)^#(.+)$`)
-	reAbsoluteShort   = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.w$`)
-	reAbsoluteLong    = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.l$`)
-	reAddressIndex    = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(a([0-7]),(d|a)([0-7])\.(w|l)\)$`)
-	rePCRelDisp       = regexp.MustCompile(`(?i)^([a-zA-Z0-9_]+)\(pc\)$`)
-	rePCRelIndex      = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(pc,(d|a)([0-7])\.(w|l)\)$`)
-	reAbsoluteSimple  = regexp.MustCompile(`(?i)^\$[a-fA-F0-9]+$`)
-	reLabel           = regexp.MustCompile(`(?i)^[a-z_][a-z0-9_]*$`)
+	// parenthesized absolute forms: ($val).w or ($val).l
+	reAbsoluteParenShort = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.w$`)
+	reAbsoluteParenLong  = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.l$`)
+	// $hex.w or $hex.l
+	reAbsoluteDollarSize = regexp.MustCompile(`(?i)^\$([a-fA-F0-9]+)\.(w|l)$`)
+	reAddressIndex       = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(a([0-7]),(d|a)([0-7])\.(w|l)\)$`)
+	// PC-relative forms:
+	//   - parenthesized "(<disp>,pc)"  e.g. "($10,pc)" or "(label,pc)"
+	//   - non-parenthesized "label(pc)" or "$10(pc)"
+	rePCRelDispParen = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+),\s*pc\)$`)
+	rePCRelDisp      = regexp.MustCompile(`(?i)^([a-zA-Z0-9_\$\-%]+)\(pc\)$`)
+	rePCRelIndex     = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(pc,(d|a)([0-7])\.(w|l)\)$`)
+	reAbsoluteSimple = regexp.MustCompile(`(?i)^\$[a-fA-F0-9]+$`)
+	reLabel          = regexp.MustCompile(`(?i)^[a-z_][a-z0-9_]*$`)
 )
 
 // ParseMnemonic splits an instruction like "MOVE.W" → ("move", SizeWord).
@@ -77,7 +84,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 
 	op := Operand{Raw: s}
 
-	// --- Indexed and PC-relative modes ---
+	// --- Indexed and PC-relative index modes ---
 	if m := reAddressIndex.FindStringSubmatch(s); m != nil {
 		return parseAddressIndex(m, asm)
 	}
@@ -85,17 +92,40 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return parsePCRelIndex(m, asm)
 	}
 
-	// PC relative displacement (label(PC))
-	if m := rePCRelDisp.FindStringSubmatch(s); m != nil {
+	// --- Parenthesized PC-relative: (disp,pc) or (label,pc) ---
+	if m := rePCRelDispParen.FindStringSubmatch(s); m != nil {
+		inner := m[1]
+		// numeric displacement?
+		if val, err := parseConstant(inner, asm); err == nil {
+			op.Mode = cpu.ModeOther
+			op.Register = cpu.ModePCRelative
+			op.ExtensionWords = []uint16{uint16(int16(val))}
+			return op, nil
+		}
+		// otherwise treat as a label to be resolved later
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.ModePCRelative
-		op.Label = strings.ToLower(m[1])
-		// op.ExtensionWords = []uint16{0}
+		op.Label = strings.ToLower(inner)
 		return op, nil
 	}
 
-	// --- Absolute short and long ---
-	if m := reAbsoluteShort.FindStringSubmatch(s); m != nil {
+	// PC relative displacement (label(pc) or $hex(pc))
+	if m := rePCRelDisp.FindStringSubmatch(s); m != nil {
+		inner := m[1]
+		if val, err := parseConstant(inner, asm); err == nil {
+			op.Mode = cpu.ModeOther
+			op.Register = cpu.ModePCRelative
+			op.ExtensionWords = []uint16{uint16(int16(val))}
+			return op, nil
+		}
+		op.Mode = cpu.ModeOther
+		op.Register = cpu.ModePCRelative
+		op.Label = strings.ToLower(inner)
+		return op, nil
+	}
+
+	// --- Absolute short and long — parenthesized forms ( ($val).w / ($val).l ) ---
+	if m := reAbsoluteParenShort.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
 			return op, err
@@ -105,7 +135,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		op.ExtensionWords = []uint16{uint16(val)}
 		return op, nil
 	}
-	if m := reAbsoluteLong.FindStringSubmatch(s); m != nil {
+	if m := reAbsoluteParenLong.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
 			return op, err
@@ -113,6 +143,25 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.RegAbsLong
 		op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
+		return op, nil
+	}
+
+	// --- Absolute forms like $xxxx.w / $xxxx.l (support $hex.w / $hex.l) ---
+	if m := reAbsoluteDollarSize.FindStringSubmatch(s); m != nil {
+		valStr := m[1]
+		size := strings.ToLower(m[2])
+		val, err := strconv.ParseInt(valStr, 16, 64)
+		if err != nil {
+			return op, fmt.Errorf("invalid hex constant: %s", valStr)
+		}
+		op.Mode = cpu.ModeOther
+		if size == "w" {
+			op.Register = cpu.RegAbsShort
+			op.ExtensionWords = []uint16{uint16(val)}
+		} else {
+			op.Register = cpu.RegAbsLong
+			op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
+		}
 		return op, nil
 	}
 
@@ -176,7 +225,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return op, nil
 	}
 
-	// --- Absolute numeric ---
+	// --- Absolute numeric without explicit size (e.g. $DEAD) ---
 	if m := reAbsoluteSimple.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[0], asm)
 		if err != nil {
@@ -200,7 +249,6 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.ModePCRelative
 		op.Label = strings.ToLower(s)
-		// op.ExtensionWords = []uint16{0}
 		return op, nil
 	}
 
