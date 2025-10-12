@@ -16,6 +16,7 @@ var ShiftRotateType = map[string]uint16{
 	"asr": 0x0000, "asl": 0x0100,
 	"lsr": 0x0008, "lsl": 0x0108,
 	"ror": 0x0018, "rol": 0x0118,
+	"roxr": 0x0010, "roxl": 0x0110, // Add these
 }
 
 // BitwiseSize contains size bits for shift/rotate register forms.
