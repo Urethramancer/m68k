@@ -7,12 +7,8 @@ import (
 	"github.com/Urethramancer/m68k/cpu"
 )
 
-// CanBeAddqSubq checks if an ADD/SUB instruction can be optimized to ADDQ/SUBQ.
-func CanBeAddqSubq(mn Mnemonic, src Operand, asm *Assembler) bool {
-	m := strings.ToLower(mn.Value)
-	if m != "addq" && m != "subq" {
-		return false
-	}
+// isQuickImmediate checks if an operand is an immediate value between 1 and 8.
+func isQuickImmediate(src Operand, asm *Assembler) bool {
 	if !src.IsImmediate() {
 		return false
 	}
@@ -39,15 +35,33 @@ func assembleMath(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, er
 	return nil, fmt.Errorf("unknown math instruction: %s", mn.Value)
 }
 
+// assembleAdd and assembleSub are now simple wrappers for the merged helper function.
 func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+	return assembleAddSub(mn, operands, asm, true)
+}
+
+func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+	return assembleAddSub(mn, operands, asm, false)
+}
+
+// assembleAddSub is a merged helper for both ADD and SUB variants.
+func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool) ([]uint16, error) {
 	if len(operands) != 2 {
-		return nil, fmt.Errorf("ADD requires 2 operands")
+		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
 	src, dst := operands[0], operands[1]
 
-	// ADDQ optimization
-	if CanBeAddqSubq(mn, src, asm) {
-		opword := uint16(cpu.OPADDQ)
+	// Set opcodes based on the operation type
+	var opq, opi, opa, op uint16
+	if isAdd {
+		opq, opi, opa, op = cpu.OPADDQ, cpu.OPADDI, cpu.OPADDA, cpu.OPADD
+	} else {
+		opq, opi, opa, op = cpu.OPSUBQ, cpu.OPSUBI, cpu.OPSUBA, cpu.OPSUB
+	}
+
+	// ADDQ/SUBQ optimization
+	if isQuickImmediate(src, asm) {
+		opword := opq
 		val, _ := parseConstant(src.Raw, asm)
 		data := uint16(val)
 		if val == 8 {
@@ -69,9 +83,9 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, ext...), nil
 	}
 
-	// ADDI (immediate source)
+	// ADDI/SUBI (immediate source)
 	if src.IsImmediate() {
-		opword := uint16(cpu.OPADDI)
+		opword := opi
 		var err error
 		opword, err = setOpwordSize(opword, mn.Size, SizeBitsSingleOp)
 		if err != nil {
@@ -84,7 +98,6 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		}
 		opword |= eaBits
 
-		// Build immediate extension based on instruction size, not value size.
 		val, err := parseConstant(src.Raw, asm)
 		if err != nil {
 			return nil, err
@@ -101,9 +114,9 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, append(immExt, ext...)...), nil
 	}
 
-	// ADDA (destination is address register)
+	// ADDA/SUBA (destination is address register)
 	if dst.Mode == cpu.ModeAddr {
-		opword := uint16(cpu.OPADDA)
+		opword := opa
 		var err error
 		opword, err = setOpwordSize(opword, mn.Size, SizeBitsAddr)
 		if err != nil {
@@ -119,8 +132,8 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, ext...), nil
 	}
 
-	// Standard ADD (register or memory destination)
-	opword := uint16(cpu.OPADD)
+	// Standard ADD/SUB (register or memory destination)
+	opword := op
 	var err error
 	opword, err = setOpwordSize(opword, mn.Size, SizeBits)
 	if err != nil {
@@ -135,113 +148,6 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		eaBits, ext, err = encodeEA(src)
 	} else {
 		opword |= 0x0100 // direction bit: Dn to EA
-		opword |= (src.Register << 9)
-		eaBits, ext, err = encodeEA(dst)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	opword |= eaBits
-	return append([]uint16{opword}, ext...), nil
-}
-
-func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
-	if len(operands) != 2 {
-		return nil, fmt.Errorf("SUB requires 2 operands")
-	}
-	src, dst := operands[0], operands[1]
-
-	// SUBQ optimization
-	if CanBeAddqSubq(mn, src, asm) {
-		opword := uint16(cpu.OPSUBQ)
-		val, _ := parseConstant(src.Raw, asm)
-		data := uint16(val)
-		if val == 8 {
-			data = 0
-		}
-		opword |= (data << 9)
-
-		var err error
-		opword, err = setOpwordSize(opword, mn.Size, SizeBits)
-		if err != nil {
-			return nil, err
-		}
-
-		eaBits, ext, err := encodeEA(dst)
-		if err != nil {
-			return nil, err
-		}
-		opword |= eaBits
-		return append([]uint16{opword}, ext...), nil
-	}
-
-	// SUBI (immediate source)
-	if src.IsImmediate() {
-		opword := uint16(cpu.OPSUBI)
-		var err error
-		opword, err = setOpwordSize(opword, mn.Size, SizeBitsSingleOp)
-		if err != nil {
-			return nil, err
-		}
-
-		eaBits, ext, err := encodeEA(dst)
-		if err != nil {
-			return nil, err
-		}
-		opword |= eaBits
-
-		// Build immediate extension based on instruction size, not value size.
-		val, err := parseConstant(src.Raw, asm)
-		if err != nil {
-			return nil, err
-		}
-
-		var immExt []uint16
-		switch mn.Size {
-		case cpu.SizeLong:
-			immExt = []uint16{uint16(val >> 16), uint16(val)}
-		default: // .b or .w
-			immExt = []uint16{uint16(val)}
-		}
-
-		return append([]uint16{opword}, append(immExt, ext...)...), nil
-	}
-
-	// SUBA
-	if dst.Mode == cpu.ModeAddr {
-		opword := uint16(cpu.OPSUBA)
-		var err error
-		opword, err = setOpwordSize(opword, mn.Size, SizeBitsAddr)
-		if err != nil {
-			return nil, err
-		}
-		opword |= (dst.Register << 9)
-
-		eaBits, ext, err := encodeEA(src)
-		if err != nil {
-			return nil, err
-		}
-		opword |= eaBits
-		return append([]uint16{opword}, ext...), nil
-	}
-
-	// Standard SUB
-	opword := uint16(cpu.OPSUB)
-	var err error
-	opword, err = setOpwordSize(opword, mn.Size, SizeBits)
-	if err != nil {
-		return nil, err
-	}
-
-	var eaBits uint16
-	var ext []uint16
-
-	if dst.Mode == cpu.ModeData {
-		opword |= (dst.Register << 9)
-		eaBits, ext, err = encodeEA(src)
-	} else {
-		opword |= 0x0100
 		opword |= (src.Register << 9)
 		eaBits, ext, err = encodeEA(dst)
 	}
