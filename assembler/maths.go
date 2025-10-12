@@ -39,15 +39,13 @@ func assembleMath(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, er
 	return nil, fmt.Errorf("unknown math instruction: %s", mn.Value)
 }
 
-// ---------------- ADD ----------------
-
 func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("ADD requires 2 operands")
 	}
 	src, dst := operands[0], operands[1]
 
-	// --- ADDQ optimization ---
+	// ADDQ optimization
 	if CanBeAddqSubq(mn, src, asm) {
 		opword := uint16(cpu.OPADDQ)
 		val, _ := parseConstant(src.Raw, asm)
@@ -71,7 +69,7 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, ext...), nil
 	}
 
-	// --- ADDI (immediate source) ---
+	// ADDI (immediate source)
 	if src.IsImmediate() {
 		opword := uint16(cpu.OPADDI)
 		var err error
@@ -103,7 +101,7 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, append(immExt, ext...)...), nil
 	}
 
-	// --- ADDA (destination is address register) ---
+	// ADDA (destination is address register)
 	if dst.Mode == cpu.ModeAddr {
 		opword := uint16(cpu.OPADDA)
 		var err error
@@ -121,7 +119,7 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, ext...), nil
 	}
 
-	// --- Standard ADD (register or memory destination) ---
+	// Standard ADD (register or memory destination)
 	opword := uint16(cpu.OPADD)
 	var err error
 	opword, err = setOpwordSize(opword, mn.Size, SizeBits)
@@ -148,15 +146,13 @@ func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	return append([]uint16{opword}, ext...), nil
 }
 
-// ---------------- SUB ----------------
-
 func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("SUB requires 2 operands")
 	}
 	src, dst := operands[0], operands[1]
 
-	// --- SUBQ optimization ---
+	// SUBQ optimization
 	if CanBeAddqSubq(mn, src, asm) {
 		opword := uint16(cpu.OPSUBQ)
 		val, _ := parseConstant(src.Raw, asm)
@@ -180,7 +176,7 @@ func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, ext...), nil
 	}
 
-	// --- SUBI (immediate source) ---
+	// SUBI (immediate source)
 	if src.IsImmediate() {
 		opword := uint16(cpu.OPSUBI)
 		var err error
@@ -212,7 +208,7 @@ func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, append(immExt, ext...)...), nil
 	}
 
-	// --- SUBA ---
+	// SUBA
 	if dst.Mode == cpu.ModeAddr {
 		opword := uint16(cpu.OPSUBA)
 		var err error
@@ -230,7 +226,7 @@ func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return append([]uint16{opword}, ext...), nil
 	}
 
-	// --- Standard SUB ---
+	// Standard SUB
 	opword := uint16(cpu.OPSUB)
 	var err error
 	opword, err = setOpwordSize(opword, mn.Size, SizeBits)
@@ -256,8 +252,6 @@ func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	opword |= eaBits
 	return append([]uint16{opword}, ext...), nil
 }
-
-// ---------------- ADDX / SUBX ----------------
 
 func assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
@@ -288,8 +282,6 @@ func assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 	return []uint16{opword}, nil
 }
-
-// ---------------- MUL / DIV ----------------
 
 func assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {

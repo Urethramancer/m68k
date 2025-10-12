@@ -36,7 +36,7 @@ func assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	return nil, fmt.Errorf("invalid MOVEM syntax: must include register list")
 }
 
-// --- Store form: MOVEM <reglist>, <ea>
+// Store form: MOVEM <reglist>, <ea>
 func assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
 	regmask, err := parseMovemList(src.Raw)
 	if err != nil {
@@ -64,7 +64,7 @@ func assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error)
 	return append([]uint16{opword, regmask}, dstExt...), nil
 }
 
-// --- Load form: MOVEM <ea>, <reglist>
+// Load form: MOVEM <ea>, <reglist>
 func assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
 	regmask, err := parseMovemList(dst.Raw)
 	if err != nil {
@@ -87,7 +87,7 @@ func assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) 
 	return append([]uint16{opword, regmask}, srcExt...), nil
 }
 
-// --- Parse register list (e.g. "d0-d3/a1/a3") ---
+// Parse register list (e.g. "d0-d3/a1/a3")
 func parseMovemList(list string) (uint16, error) {
 	var mask uint16
 	parts := strings.Split(list, "/")
@@ -131,7 +131,7 @@ func parseMovemList(list string) (uint16, error) {
 	return mask, nil
 }
 
-// --- Parse register name (e.g. "d0", "a6") ---
+// Parse register name (e.g. "d0", "a6")
 func parseRegIndex(reg string) (int, error) {
 	reg = strings.TrimSpace(strings.ToLower(reg))
 	if len(reg) < 2 {

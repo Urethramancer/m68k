@@ -24,29 +24,36 @@ func assembleFlow(mn Mnemonic, operands []Operand, labels map[string]uint32, pc 
 	return nil, fmt.Errorf("unknown flow instruction: %s", mn.Value)
 }
 
-// getSizeBra calculates the optimal size for a branch instruction.
-func getSizeBra(n *Node, asm *Assembler, pc uint32) (uint32, error) {
-	if n.Mnemonic.Size == cpu.SizeShort {
-		return 2, nil
+// getSizeBra calculates the optimal size for a branch instruction during the sizing pass.
+func getSizeBra(n *Node, asm *Assembler, pc uint32) uint32 {
+	// If size is explicitly specified (e.g., bra.s), respect it.
+	if n.Mnemonic.Size == cpu.SizeByte {
+		return 2
 	}
 	if n.Mnemonic.Size == cpu.SizeWord {
-		return 4, nil
+		return 4
 	}
 
-	label := n.Operands[0].Raw
+	// If no operand, it's an error, but for sizing assume short.
+	if len(n.Operands) == 0 {
+		return 2
+	}
+
+	label := strings.ToLower(strings.TrimSpace(n.Operands[0].Raw))
 	target, ok := asm.labels[label]
 	if !ok {
-		return 4, nil // assume worst-case for forward reference
+		// Forward reference: assume long branch (worst case) to be safe.
+		return 4
 	}
 
 	offset := int32(target) - int32(pc+2)
 	if offset >= -128 && offset <= 127 {
-		return 2, nil
+		return 2 // Fits in a short branch.
 	}
-	return 4, nil
+	return 4 // Requires a long branch.
 }
 
-// --- JMP / JSR ---
+// JMP / JSR
 
 func assembleJmpJsr(mn Mnemonic, operands []Operand, labels map[string]uint32) ([]uint16, error) {
 	if len(operands) != 1 {
@@ -60,7 +67,7 @@ func assembleJmpJsr(mn Mnemonic, operands []Operand, labels map[string]uint32) (
 	}
 
 	// Label as absolute long
-	if target, ok := labels[src.Raw]; ok {
+	if target, ok := labels[strings.ToLower(src.Raw)]; ok {
 		if mn.Value == "jmp" {
 			return []uint16{0x4EF9, uint16(target >> 16), uint16(target)}, nil
 		}
@@ -77,13 +84,13 @@ func assembleJmpJsr(mn Mnemonic, operands []Operand, labels map[string]uint32) (
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-// --- Branches (BRA/BSR/Bcc) ---
+// Branches (BRA/BSR/Bcc)
 
 func assembleBra(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32, size uint32) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("branch instruction requires 1 operand")
 	}
-	label := operands[0].Raw
+	label := strings.ToLower(strings.TrimSpace(operands[0].Raw))
 
 	baseOpcode, ok := cpu.BranchOpcodes[mn.Value]
 	if !ok {
@@ -110,7 +117,7 @@ func assembleBra(mn Mnemonic, operands []Operand, labels map[string]uint32, pc u
 	return []uint16{baseOpcode, uint16(offset & 0xFFFF)}, nil
 }
 
-// --- Scc (Set Conditional) ---
+// Scc (Set Conditional)
 
 func assembleScc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
@@ -135,7 +142,7 @@ func assembleScc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	return append([]uint16{opword}, dst.ExtensionWords...), nil
 }
 
-// --- DBcc (Decrement & Branch Conditional) ---
+// DBcc (Decrement & Branch Conditional)
 
 func assembleDbcc(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32) ([]uint16, error) {
 	if len(operands) != 2 {
@@ -161,7 +168,7 @@ func assembleDbcc(mn Mnemonic, operands []Operand, labels map[string]uint32, pc 
 	opword |= condCode << 8
 	opword |= src.Register
 
-	labelName := dst.Raw
+	labelName := strings.ToLower(strings.TrimSpace(dst.Raw))
 	target, ok := labels[labelName]
 	if !ok {
 		return nil, fmt.Errorf("undefined label '%s'", labelName)
@@ -175,7 +182,7 @@ func assembleDbcc(mn Mnemonic, operands []Operand, labels map[string]uint32, pc 
 	return []uint16{opword, uint16(offset & 0xFFFF)}, nil
 }
 
-// --- Returns ---
+// Returns
 
 func assembleRts() ([]uint16, error) { return []uint16{cpu.OPRTS}, nil }
 func assembleRtr() ([]uint16, error) { return []uint16{cpu.OPRTR}, nil }

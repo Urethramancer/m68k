@@ -7,11 +7,15 @@ import (
 	"github.com/Urethramancer/m68k/cpu"
 )
 
+// RegLabel is a placeholder register value indicating a label to be resolved.
+const RegLabel = 0xFE
+
 // Assembler holds the state for the assembly process.
 type Assembler struct {
-	symbols   map[string]int64
-	labels    map[string]uint32
-	outputPos uint32
+	symbols     map[string]int64
+	labels      map[string]uint32
+	outputPos   uint32
+	baseAddress uint32
 }
 
 // New creates a new Assembler instance.
@@ -24,119 +28,262 @@ func New() *Assembler {
 
 // Assemble takes M68k assembly code and returns the machine code.
 func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
+	asm.baseAddress = baseAddress
 	lines := strings.Split(strings.ReplaceAll(src, "\r\n", "\n"), "\n")
-
 	nodes, err := asm.parseLines(lines)
 	if err != nil {
 		return nil, fmt.Errorf("parsing error: %w", err)
 	}
 
-	asm.outputPos = 0
-	// Pass: resolve label addresses and node sizes until stable.
-	for {
-		pc := baseAddress
-		changed := false
-		for _, n := range nodes {
-			if n.Type == NodeLabel {
-				if addr, ok := asm.labels[n.Label]; !ok || addr != pc {
-					asm.labels[n.Label] = pc
-					changed = true
-				}
-				continue
-			}
-
-			// handle .org in sizing pass so subsequent sizes/labels use the correct PC
-			if n.Type == NodeDirective && len(n.Parts) > 1 &&
-				(strings.EqualFold(n.Parts[0], "org") || strings.EqualFold(n.Parts[0], ".org")) {
-				addr, err := parseConstant(n.Parts[1], asm)
-				if err != nil {
-					return nil, err
-				}
-				pc = uint32(addr)
-				asm.outputPos = pc - baseAddress
-				continue
-			}
-
-			oldSize := n.Size
-			size, err := n.GetSize(asm, pc)
-			if err != nil {
-				return nil, fmt.Errorf("error calculating size for '%v': %w", n.Parts, err)
-			}
-
-			if oldSize != size {
-				changed = true
-			}
-
-			n.Size = size
-			pc += size
+	for pass := 0; ; pass++ {
+		changed, err := asm.runSizingPass(nodes)
+		if err != nil {
+			return nil, fmt.Errorf("pass %d failed: %w", pass+1, err)
 		}
-
 		if !changed {
 			break
 		}
+		if pass > 10 {
+			return nil, fmt.Errorf("failed to stabilize label addresses after 10 passes")
+		}
 	}
 
-	// Generate machine code as bytes (so we can emit single-byte .even padding)
+	// Final Code Generation Pass
 	var out []byte
 	pc := baseAddress
-	asm.outputPos = pc - baseAddress
+	asm.outputPos = 0
 
 	for _, n := range nodes {
-		// Labels emit nothing
 		if n.Type == NodeLabel {
-			continue
-		}
-
-		// .org handling before generation
-		if n.Type == NodeDirective && len(n.Parts) > 1 &&
-			(strings.EqualFold(n.Parts[0], "org") || strings.EqualFold(n.Parts[0], ".org")) {
-			addr, _ := parseConstant(n.Parts[1], asm)
-			pc = uint32(addr)
-			asm.outputPos = pc - baseAddress
-			continue
-		}
-
-		// Special-case even in the generator so we can emit a single padding byte when needed
-		dirName := ""
-		if n.Type == NodeDirective {
-			dirName = strings.TrimPrefix(strings.ToLower(n.Parts[0]), ".")
-		}
-		if dirName == "even" {
-			if asm.outputPos%2 != 0 {
-				out = append(out, 0x00)
-				asm.outputPos++
-				pc = baseAddress + asm.outputPos
-			}
-			// .even emits at most that one byte; nothing else to do for this node
 			continue
 		}
 
 		var words []uint16
 		var genErr error
 
+		// The main loop must correctly dispatch based on Node Type.
 		if n.Type == NodeDirective {
-			words, genErr = asm.generateDirectiveCode(n)
-		} else { // NodeInstruction
-			words, genErr = asm.generateInstructionCode(n, pc)
+			// Handle directives that affect PC or emit padding.
+			dirName := strings.TrimPrefix(strings.ToLower(n.Parts[0]), ".")
+			switch dirName {
+			case "org":
+				addr, _ := parseConstant(n.Parts[1], asm)
+				pc = uint32(addr)
+				asm.outputPos = pc - baseAddress
+				continue // ORG emits no code itself
+			case "even":
+				if asm.outputPos%2 != 0 {
+					out = append(out, 0x00)
+					asm.outputPos++
+					pc++
+				}
+				continue // EVEN emits at most one byte
+			default:
+				// For data-emitting directives like DCB, call the directive generator.
+				words, genErr = asm.generateDirectiveCode(n)
+			}
+		} else {
+			// For instructions, call the instruction generator.
+			words, genErr = asm.generateInstructionCode(n, pc, true)
 		}
 
 		if genErr != nil {
-			return nil, fmt.Errorf("error generating code for '%v': %w", n.Parts, genErr)
+			return nil, fmt.Errorf("final generation failed for '%v': %w", n.Parts, genErr)
 		}
 
-		// Append produced words as bytes (big-endian) to out
 		if len(words) > 0 {
 			bytes := cpu.WordsToBytes(words)
 			out = append(out, bytes...)
 			asm.outputPos += uint32(len(bytes))
-			pc = baseAddress + asm.outputPos
+			pc += uint32(len(bytes))
 		}
 	}
 
 	return out, nil
 }
 
-// parseLines converts raw source lines into a slice of Node objects.
+// runSizingPass executes one sizing/label resolution pass and returns true if anything changed.
+func (asm *Assembler) runSizingPass(nodes []*Node) (bool, error) {
+	pc := asm.baseAddress
+	changed := false
+
+	for _, n := range nodes {
+		if n.Type == NodeLabel {
+			if addr, ok := asm.labels[n.Label]; !ok || addr != pc {
+				asm.labels[n.Label] = pc
+				changed = true
+			}
+			continue
+		}
+
+		oldSize := n.Size
+		var size uint32
+
+		if n.Type == NodeDirective {
+			dirName := strings.TrimPrefix(strings.ToLower(n.Parts[0]), ".")
+			switch dirName {
+			case "org":
+				addr, err := parseConstant(n.Parts[1], asm)
+				if err != nil {
+					return false, err
+				}
+				pc = uint32(addr)
+				continue
+			case "equ":
+				continue
+			}
+			// For all other directives, get their size.
+			dirSize, err := asm.getDirectiveSize(n, pc)
+			if err != nil {
+				return false, err
+			}
+			size = dirSize
+		} else { // NodeInstruction
+			// Use getSizeBra for accurate branch sizing.
+			if isBranchMnemonic(n.Mnemonic.Value) {
+				size = getSizeBra(n, asm, pc)
+			} else {
+				// For other instructions, generate to find size, assuming worst-case for errors.
+				words, _ := asm.generateInstructionCode(n, pc, false)
+				size = uint32(len(words) * 2)
+			}
+		}
+
+		if oldSize != size {
+			n.Size = size
+			changed = true
+		}
+		pc += size
+	}
+	return changed, nil
+}
+
+// generateInstructionCode is the single source of truth for instruction binary generation.
+func (asm *Assembler) generateInstructionCode(n *Node, pc uint32, finalPass bool) ([]uint16, error) {
+	operands := make([]Operand, len(n.Operands))
+	copy(operands, n.Operands)
+
+	for i := range operands {
+		op := &operands[i]
+		isBareLabel := op.Mode == cpu.ModeOther && op.Register == RegLabel
+		// Check if the parser explicitly identified this as PC-relative with a label
+		isExplicitPCRel := op.Mode == cpu.ModeOther && op.Register == cpu.ModePCRelative && op.Label != ""
+
+		if isBareLabel || isExplicitPCRel {
+			target, ok := asm.labels[op.Label]
+			if !ok {
+				if finalPass {
+					return nil, fmt.Errorf("undefined label: %s", op.Label)
+				}
+				// Sizing pass: assume worst-case (absolute long) for forward refs.
+				op.Register = cpu.ModeAbsLong
+				op.ExtensionWords = []uint16{0, 0}
+				continue
+			}
+
+			// The M68k calculates PC-relative offsets from the address of the extension word,
+			// which is always the instruction's address (pc) + 2.
+			offsetPC := pc + 2
+			offset := int32(target) - int32(offsetPC)
+
+			if isBranchMnemonic(n.Mnemonic.Value) {
+				// Branches are a special case. Their logic is handled entirely within
+				// assembleFlow, which calculates its own offset. We don't modify the operand here.
+				continue
+			}
+
+			// If the syntax was explicitly label(pc), it MUST be PC-relative.
+			if isExplicitPCRel {
+				if offset < -32768 || offset > 32767 {
+					return nil, fmt.Errorf("pc-relative reference to '%s' is out of range", op.Label)
+				}
+				op.ExtensionWords = []uint16{uint16(int16(offset))}
+				continue
+			}
+
+			// For bare labels, the assembler chooses the best mode.
+			if canBePCRelative(n.Mnemonic) && offset >= -32768 && offset <= 32767 {
+				op.Register = cpu.ModePCRelative
+				op.ExtensionWords = []uint16{uint16(int16(offset))}
+			} else {
+				op.Register = cpu.ModeAbsLong
+				op.ExtensionWords = []uint16{uint16(target >> 16), uint16(target)}
+			}
+		}
+	}
+
+	if len(operands) > 0 {
+		for i := range operands {
+			raw := strings.ToLower(strings.TrimSpace(operands[i].Raw))
+			if raw == "sr" || raw == "ccr" || raw == "usp" {
+				return assembleStatus(n.Mnemonic, operands, asm)
+			}
+		}
+	}
+
+	switch n.Mnemonic.Value {
+	case "movem":
+		return assembleMovem(n.Mnemonic, operands)
+	case "movep":
+		return assembleMovep(n.Mnemonic, operands, asm)
+	case "move", "movea", "moveq":
+		return assembleMove(n.Mnemonic, operands, asm, pc)
+	case "add", "adda", "sub", "suba", "mulu", "muls", "divu", "divs", "addx", "subx", "addq", "subq", "addi", "subi":
+		return assembleMath(n.Mnemonic, operands, asm)
+	case "and", "or", "eor", "not", "andi", "ori", "eori":
+		return assembleLogical(n.Mnemonic, operands, asm)
+	case "lea", "pea":
+		return assembleAddressMode(n.Mnemonic, operands, asm, pc)
+	case "link", "unlk":
+		return assembleStack(n.Mnemonic, operands, asm)
+	case "cmp", "cmpa", "cmpi", "tst", "chk":
+		return assembleCompare(n.Mnemonic, operands, asm)
+	case "abcd", "sbcd", "nbcd":
+		return assembleBcd(n.Mnemonic, operands)
+	case "clr", "neg", "negx", "swap", "ext", "tas", "exg", "reset", "stop", "nop", "illegal":
+		return assembleMisc(n.Mnemonic, operands)
+	case "btst", "bset", "bclr", "bchg", "lsl", "lsr", "asl", "asr", "rol", "ror":
+		return assembleBitwise(n.Mnemonic, operands, asm)
+	case "trap", "trapv":
+		return assembleTrap(n.Mnemonic, operands, asm)
+	case "rte", "rtr", "rts", "jmp", "jsr", "bra", "bsr", "bhi", "bls", "bcc", "bcs", "bne", "beq", "bvc", "bvs", "bpl", "bmi", "bge", "blt", "bgt", "ble":
+		return assembleFlow(n.Mnemonic, operands, asm.labels, pc, n.Size)
+	default:
+		if strings.HasPrefix(n.Mnemonic.Value, "s") {
+			return assembleScc(n.Mnemonic, operands)
+		}
+		if strings.HasPrefix(n.Mnemonic.Value, "db") {
+			return assembleDbcc(n.Mnemonic, operands, asm.labels, pc)
+		}
+
+		if !finalPass {
+			// Sizing pass: assume a worst-case size for unknown instructions.
+			return []uint16{0, 0, 0}, nil
+		}
+		return nil, fmt.Errorf("unknown instruction: %s", n.Mnemonic.Value)
+	}
+}
+
+// canBePCRelative checks if an instruction's EA can be PC-relative.
+func canBePCRelative(mn Mnemonic) bool {
+	switch mn.Value {
+	case "jmp", "jsr":
+		return false
+	default:
+		return true
+	}
+}
+
+// isBranchMnemonic checks if an instruction is a form of branch.
+func isBranchMnemonic(val string) bool {
+	switch val {
+	case "bra", "bsr", "bhi", "bls", "bcc", "bcs", "bne", "beq", "bvc", "bvs", "bpl", "bmi", "bge", "blt", "bgt", "ble":
+		return true
+	default:
+		return strings.HasPrefix(val, "db")
+	}
+}
+
 func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 	var nodes []*Node
 	for i, line := range lines {
@@ -148,15 +295,16 @@ func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 			continue
 		}
 
+		var label string
 		if strings.Contains(line, ":") {
 			parts := strings.SplitN(line, ":", 2)
-			label := strings.TrimSpace(parts[0])
-			if !strings.ContainsAny(label, " \t") {
-				nodes = append(nodes, &Node{Type: NodeLabel, Label: strings.ToLower(label), Parts: []string{label + ":"}})
+			parsedLabel := strings.TrimSpace(parts[0])
+			if !strings.ContainsAny(parsedLabel, " \t") {
+				label = strings.ToLower(parsedLabel)
+				nodes = append(nodes, &Node{Type: NodeLabel, Label: label, Parts: []string{label + ":"}})
 				line = strings.TrimSpace(parts[1])
 			}
 		}
-
 		if line == "" {
 			continue
 		}
@@ -170,15 +318,28 @@ func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 			operandStr = strings.TrimSpace(line[firstSpace:])
 		}
 
+		opFields := strings.Fields(operandStr)
+		if len(opFields) > 0 && strings.EqualFold(opFields[0], "equ") {
+			expr := ""
+			if len(opFields) > 1 {
+				expr = strings.Join(opFields[1:], " ")
+			}
+			val, err := parseConstant(expr, asm)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: invalid equ value for %s: %v", i+1, mnemonic, err)
+			}
+			asm.symbols[strings.ToLower(mnemonic)] = val
+			continue
+		}
+
 		nodeParts := []string{mnemonic}
 		if operandStr != "" {
 			nodeParts = append(nodeParts, operandStr)
 		}
 
-		directiveCheck := strings.ToLower(mnemonic)
-		directiveCheck = strings.TrimPrefix(directiveCheck, ".")
+		directiveCheck := strings.ToLower(strings.TrimPrefix(mnemonic, "."))
 		switch directiveCheck {
-		case "dc.b", "dc.w", "dc.l", "ds.b", "ds.w", "ds.l", "org", "equ", "even":
+		case "dc.b", "dc.w", "dc.l", "ds.b", "ds.w", "ds.l", "org", "even":
 			nodes = append(nodes, &Node{Type: NodeDirective, Parts: nodeParts})
 			continue
 		}
@@ -190,155 +351,24 @@ func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 
 		var operands []Operand
 		if operandStr != "" {
-			opStrings := splitOperands(operandStr)
-			for _, s := range opStrings {
+			for _, s := range splitOperands(operandStr) {
 				s = strings.TrimSpace(s)
+				if s == "" {
+					continue
+				}
 				op, err := parseOperand(s, asm)
 				if err != nil {
-					// Keep raw placeholder to allow later patching (labels, unknown EAs).
-					operands = append(operands, Operand{Raw: s})
-				} else {
-					op.Raw = s
-					operands = append(operands, op)
+					return nil, fmt.Errorf("line %d: error parsing operand '%s': %w", i+1, s, err)
 				}
+				operands = append(operands, op)
 			}
 		}
+
 		nodes = append(nodes, &Node{Type: NodeInstruction, Mnemonic: mn, Operands: operands, Parts: nodeParts})
 	}
 	return nodes, nil
 }
 
-// generateInstructionCode resolves operands (including forward labels), patches PC-relative
-// candidates, and dispatches to the appropriate instruction assembler.
-func (asm *Assembler) generateInstructionCode(n *Node, pc uint32) ([]uint16, error) {
-	// Resolve operands; preserve raw/label if parsing fails (forward label).
-	operands := make([]Operand, 0, len(n.Operands))
-	for _, op := range n.Operands {
-		resolved, err := parseOperand(op.Raw, asm)
-		if err != nil {
-			// keep original (unresolved) operand
-			operands = append(operands, op)
-			continue
-		}
-		resolved.Raw = op.Raw
-		if resolved.Label == "" && op.Label != "" {
-			resolved.Label = op.Label
-		}
-		operands = append(operands, resolved)
-	}
-
-	// Patch known labels into PC-relative or absolute-long encoding when appropriate.
-	for i := range operands {
-		op := &operands[i]
-		if op.Mode != cpu.ModeOther {
-			continue
-		}
-
-		// derive label name from op.Label (preferred) or op.Raw
-		labelName := op.Label
-		if labelName == "" {
-			raw := strings.ToLower(strings.TrimSpace(op.Raw))
-			if strings.HasSuffix(raw, "(pc)") {
-				labelName = strings.TrimSpace(strings.TrimSuffix(raw, "(pc)"))
-			} else {
-				labelName = strings.Trim(raw, "() ")
-			}
-		}
-		if labelName == "" {
-			continue
-		}
-
-		target, ok := asm.labels[strings.ToLower(labelName)]
-		if !ok {
-			continue
-		}
-		offset := int32(target) - int32(pc) - 2
-
-		// If parser created a PC-relative placeholder, fill displacement.
-		if op.Register == cpu.ModePCRelative {
-			op.ExtensionWords = []uint16{uint16(int16(offset))}
-			continue
-		}
-
-		// If parser left an absolute-long placeholder (2 ext words), convert to PC-relative
-		// when offset fits; otherwise ensure extension words contain the actual absolute address.
-		if len(op.ExtensionWords) == 2 {
-			if offset >= -32768 && offset <= 32767 {
-				op.Register = cpu.ModePCRelative
-				op.ExtensionWords = []uint16{uint16(int16(offset))}
-			} else {
-				op.ExtensionWords = []uint16{uint16(target >> 16), uint16(target)}
-				op.Register = cpu.RegAbsLong
-			}
-			continue
-		}
-
-		// If Reg says AbsLong but ext words empty (bare label case), fill appropriately.
-		if op.Register == cpu.RegAbsLong && len(op.ExtensionWords) == 0 {
-			if offset >= -32768 && offset <= 32767 {
-				op.Register = cpu.ModePCRelative
-				op.ExtensionWords = []uint16{uint16(int16(offset))}
-			} else {
-				op.ExtensionWords = []uint16{uint16(target >> 16), uint16(target)}
-			}
-		}
-	}
-
-	// write back patched operands
-	n.Operands = operands
-
-	// Special-case: operations involving SR/CCR/USP must go through assembleStatus.
-	// e.g. MOVE <ea>, SR  ; MOVE SR, <ea> ; ANDI #<val>, SR ; MOVE <ea>, USP ; MOVE USP, <ea>
-	if len(operands) > 0 {
-		for i := range operands {
-			raw := strings.ToLower(strings.TrimSpace(operands[i].Raw))
-			if raw == "sr" || raw == "ccr" || raw == "usp" {
-				return assembleStatus(n.Mnemonic, n.Operands, asm)
-			}
-		}
-	}
-
-	// Dispatch to assembler functions.
-	switch n.Mnemonic.Value {
-	case "movem":
-		return assembleMovem(n.Mnemonic, n.Operands)
-	case "movep":
-		return assembleMovep(n.Mnemonic, n.Operands, asm)
-	case "move", "movea", "moveq":
-		return assembleMove(n.Mnemonic, n.Operands, asm, pc)
-	case "add", "adda", "sub", "suba", "mulu", "muls", "divu", "divs",
-		"addx", "subx", "addq", "subq", "addi", "subi":
-		return assembleMath(n.Mnemonic, n.Operands, asm)
-	case "and", "or", "eor", "not", "andi", "ori", "eori":
-		return assembleLogical(n.Mnemonic, n.Operands, asm)
-	case "lea", "pea":
-		return assembleAddressMode(n.Mnemonic, n.Operands, asm, pc)
-	case "link", "unlk":
-		return assembleStack(n.Mnemonic, n.Operands, asm)
-	case "cmp", "cmpa", "cmpi", "tst", "chk":
-		return assembleCompare(n.Mnemonic, n.Operands, asm)
-	case "abcd", "sbcd", "nbcd":
-		return assembleBcd(n.Mnemonic, n.Operands)
-	case "clr", "neg", "negx", "swap", "ext", "tas", "exg", "reset", "stop", "nop", "illegal":
-		return assembleMisc(n.Mnemonic, n.Operands)
-	case "btst", "bset", "bclr", "bchg", "lsl", "lsr", "asl", "asr", "rol", "ror":
-		return assembleBitwise(n.Mnemonic, n.Operands, asm)
-	case "trap", "trapv":
-		return assembleTrap(n.Mnemonic, n.Operands, asm)
-	case "rte", "rtr", "rts", "jmp", "jsr", "bra", "bsr", "bhi", "bls", "bcc", "bcs", "bne", "beq", "bvc", "bvs", "bpl", "bmi", "bge", "blt", "bgt", "ble":
-		return assembleFlow(n.Mnemonic, n.Operands, asm.labels, pc, n.Size)
-	default:
-		if strings.HasPrefix(n.Mnemonic.Value, "s") {
-			return assembleScc(n.Mnemonic, n.Operands)
-		}
-		if strings.HasPrefix(n.Mnemonic.Value, "db") {
-			return assembleDbcc(n.Mnemonic, n.Operands, asm.labels, pc)
-		}
-		return nil, fmt.Errorf("unknown instruction: %s", n.Mnemonic.Value)
-	}
-}
-
-// splitOperands splits an operand string by commas, but ignores commas inside parentheses.
 func splitOperands(s string) []string {
 	var result []string
 	parenLevel := 0

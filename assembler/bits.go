@@ -8,7 +8,7 @@ import (
 )
 
 //
-// --- Bitwise Instruction Tables ---
+// Bitwise Instruction Tables
 //
 
 // ShiftRotateType contains shift/rotate opcode type bits (added to base opcode).
@@ -26,7 +26,7 @@ var BitwiseSize = map[cpu.Size]uint16{
 }
 
 //
-// --- Bitwise Instruction Dispatcher ---
+// Bitwise Instruction Dispatcher
 //
 
 // assembleBitwise handles all shift, rotate, and bit manipulation instructions.
@@ -42,7 +42,7 @@ func assembleBitwise(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16,
 }
 
 //
-// --- Shift / Rotate ---
+// Shift / Rotate
 //
 
 // assembleShiftRotate encodes ASL/ASR, LSL/LSR, ROL/ROR.
@@ -55,7 +55,7 @@ func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uin
 	opword |= ShiftRotateType[mn.Value]
 
 	switch len(operands) {
-	// --- Memory form ---
+	// Memory form
 	case 1:
 		if mn.Size != cpu.SizeWord && mn.Size != 0 {
 			return nil, fmt.Errorf("%s on memory must be word-sized", mn.Value)
@@ -70,7 +70,7 @@ func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uin
 		opword |= eaBits
 		return append([]uint16{opword}, ext...), nil
 
-	// --- Register form ---
+	// Register form
 	case 2:
 		src, dst := operands[0], operands[1]
 		if dst.Mode != cpu.ModeData {
@@ -104,7 +104,7 @@ func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uin
 }
 
 //
-// --- Bit Manipulation ---
+// Bit Manipulation
 //
 
 // assembleBitManipulation handles BTST, BCHG, BCLR, BSET.
@@ -116,7 +116,7 @@ func assembleBitManipulation(mn Mnemonic, operands []Operand, asm *Assembler) ([
 	src, dst := operands[0], operands[1]
 	mnLower := strings.ToLower(mn.Value)
 
-	// --- Immediate form ---
+	// Immediate form
 	if src.IsImmediate() {
 		val, _ := parseConstant(src.Raw, asm)
 		opword := uint16(0x0800) // Immediate form base
@@ -129,7 +129,7 @@ func assembleBitManipulation(mn Mnemonic, operands []Operand, asm *Assembler) ([
 		return append([]uint16{opword, ext}, eaExt...), nil
 	}
 
-	// --- Register form ---
+	// Register form
 	if src.Mode != cpu.ModeData {
 		return nil, fmt.Errorf("source of %s must be data register or immediate", mn.Value)
 	}

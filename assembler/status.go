@@ -21,7 +21,7 @@ func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, 
 
 	switch strings.ToLower(mn.Value) {
 
-	// --- MOVE SR/CCR/USP variants ---
+	// MOVE SR/CCR/USP variants
 	case "move":
 		switch {
 		// MOVE <ea>, SR
@@ -48,21 +48,21 @@ func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, 
 			return nil, fmt.Errorf("invalid MOVE combination for status registers")
 		}
 
-	// --- ANDI to SR/CCR ---
+	// ANDI to SR/CCR
 	case "andi":
 		if strings.EqualFold(op2.Raw, "sr") {
 			return assembleLogicImmediateToSr(cpu.OPANDItoSR, op1, "ANDI")
 		}
 		return assembleLogicImmediateToSr(cpu.OPANDItoCCR, op1, "ANDI")
 
-	// --- ORI to SR/CCR ---
+	// ORI to SR/CCR
 	case "ori":
 		if strings.EqualFold(op2.Raw, "sr") {
 			return assembleLogicImmediateToSr(cpu.OPORItoSR, op1, "ORI")
 		}
 		return assembleLogicImmediateToSr(cpu.OPORItoCCR, op1, "ORI")
 
-	// --- EORI to SR/CCR ---
+	// EORI to SR/CCR
 	case "eori":
 		if strings.EqualFold(op2.Raw, "sr") {
 			return assembleLogicImmediateToSr(cpu.OPEORItoSR, op1, "EORI")
@@ -73,7 +73,7 @@ func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, 
 	return nil, fmt.Errorf("unknown status register instruction: %s", mn.Value)
 }
 
-// --- MOVE <ea>, SR ---
+// MOVE <ea>, SR
 func assembleMoveToSr(src Operand) ([]uint16, error) {
 	eaBits, eaExt, err := encodeEA(src)
 	if err != nil {
@@ -84,7 +84,7 @@ func assembleMoveToSr(src Operand) ([]uint16, error) {
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-// --- MOVE <ea>, CCR ---
+// MOVE <ea>, CCR
 func assembleMoveToCcr(src Operand) ([]uint16, error) {
 	eaBits, eaExt, err := encodeEA(src)
 	if err != nil {
@@ -95,7 +95,7 @@ func assembleMoveToCcr(src Operand) ([]uint16, error) {
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-// --- MOVE SR, <ea> ---
+// MOVE SR, <ea>
 func assembleMoveFromSr(dst Operand) ([]uint16, error) {
 	eaBits, eaExt, err := encodeEA(dst)
 	if err != nil {
@@ -106,7 +106,7 @@ func assembleMoveFromSr(dst Operand) ([]uint16, error) {
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-// --- MOVE An, USP ---
+// MOVE An, USP
 func assembleMoveToUsp(src Operand) ([]uint16, error) {
 	if src.Mode != cpu.ModeAddr {
 		return nil, fmt.Errorf("source for MOVE to USP must be an address register (An)")
@@ -116,7 +116,7 @@ func assembleMoveToUsp(src Operand) ([]uint16, error) {
 	return []uint16{opword}, nil
 }
 
-// --- MOVE USP, An ---
+// MOVE USP, An
 func assembleMoveFromUsp(dst Operand) ([]uint16, error) {
 	if dst.Mode != cpu.ModeAddr {
 		return nil, fmt.Errorf("destination for MOVE from USP must be an address register (An)")
@@ -126,7 +126,7 @@ func assembleMoveFromUsp(dst Operand) ([]uint16, error) {
 	return []uint16{opword}, nil
 }
 
-// --- ANDI/ORI/EORI to SR or CCR ---
+// ANDI/ORI/EORI to SR or CCR
 // These instructions operate only with an immediate source operand.
 // e.g.  ANDI #$2700,SR  or  EORI #$FF,CCR
 func assembleLogicImmediateToSr(baseOpcode uint16, src Operand, opname string) ([]uint16, error) {

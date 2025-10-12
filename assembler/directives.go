@@ -3,8 +3,6 @@ package assembler
 import (
 	"fmt"
 	"strings"
-
-	"github.com/Urethramancer/m68k/cpu"
 )
 
 // getDirectiveSize calculates the byte size of a directive for the sizing pass.
@@ -31,7 +29,7 @@ func (asm *Assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
 			return 0, fmt.Errorf("%s requires at least one value", n.Parts[0])
 		}
 		values := strings.Join(n.Parts[1:], " ")
-		return calculateDcSize(dir, values, asm)
+		return calculateDcSize(dir, values)
 
 	case "ds.b", "ds.w", "ds.l":
 		if len(n.Parts) != 2 {
@@ -91,7 +89,7 @@ func (asm *Assembler) generateDirectiveCode(n *Node) ([]uint16, error) {
 }
 
 // calculateDcSize determines the byte size of a .dc directive's data.
-func calculateDcSize(directive, values string, asm *Assembler) (uint32, error) {
+func calculateDcSize(directive, values string) (uint32, error) {
 	elementSize := getElementSize(directive)
 	var size uint32
 
@@ -122,109 +120,96 @@ func calculateDcSize(directive, values string, asm *Assembler) (uint32, error) {
 		}
 	}
 
-	// align to word boundary
-	if size%2 != 0 {
-		size++
-	}
 	return size, nil
 }
 
+// directives.go
+
 // assembleDc generates machine data for DC.B/DC.W/DC.L.
-// It always returns words in Motorola big-endian order, regardless of host endianness.
 func assembleDc(directive, values string, asm *Assembler) ([]uint16, error) {
 	elementSize := int(getElementSize(directive))
 	var bytesBuf []byte
 
-	// --- 1. Parse all the values into bytes in Motorola order ---
-	// Allow mixing strings and numeric constants for DC.B
-	if elementSize == 1 && (strings.Contains(values, "'") || strings.Contains(values, "\"")) {
-		inQuote := false
-		var quoteChar rune
-		token := ""
-		for _, c := range values {
-			switch c {
-			case '\'', '"':
-				if inQuote && c == quoteChar {
-					for i := 0; i < len(token); i++ {
-						bytesBuf = append(bytesBuf, token[i])
-					}
-					token = ""
-					inQuote = false
-				} else if !inQuote {
-					inQuote = true
-					quoteChar = c
-				} else {
-					token += string(c)
-				}
-			case ',':
-				if !inQuote {
-					token = strings.TrimSpace(token)
-					if token != "" {
-						val, err := parseConstant(token, asm)
-						if err != nil {
-							return nil, fmt.Errorf("invalid constant '%s': %v", token, err)
-						}
-						bytesBuf = append(bytesBuf, byte(val))
-					}
-					token = ""
-				} else {
-					token += string(c)
-				}
-			default:
-				token += string(c)
-			}
+	tokens := splitDcValues(values)
+	for _, tok := range tokens {
+		if tok.Quoted {
+			// Append string bytes in natural order
+			bytesBuf = append(bytesBuf, []byte(tok.Value)...)
+			continue
 		}
-		if token != "" && !inQuote {
-			token = strings.TrimSpace(token)
-			if token != "" {
-				val, err := parseConstant(token, asm)
-				if err != nil {
-					return nil, fmt.Errorf("invalid constant '%s': %v", token, err)
-				}
-				bytesBuf = append(bytesBuf, byte(val))
-			}
-		}
-	} else {
-		// Numeric only
-		for _, p := range strings.Split(values, ",") {
-			trimmed := strings.TrimSpace(p)
-			if trimmed == "" {
-				continue
-			}
-			val, err := parseConstant(trimmed, asm)
-			if err != nil {
-				return nil, fmt.Errorf("invalid constant '%s': %v", trimmed, err)
-			}
 
-			switch elementSize {
-			case 1:
-				bytesBuf = append(bytesBuf, byte(val))
-			case 2:
-				// Motorola order: high byte first
-				bytesBuf = append(bytesBuf, byte(val>>8), byte(val))
-			case 4:
-				// Motorola order: highest byte first
-				bytesBuf = append(bytesBuf, byte(val>>24), byte(val>>16), byte(val>>8), byte(val))
-			}
+		val, err := parseConstant(tok.Value, asm)
+		if err != nil {
+			return nil, fmt.Errorf("invalid constant '%s': %v", tok.Value, err)
+		}
+
+		switch elementSize {
+		case 1:
+			bytesBuf = append(bytesBuf, byte(val))
+		case 2:
+			bytesBuf = append(bytesBuf, byte(val>>8), byte(val))
+		case 4:
+			bytesBuf = append(bytesBuf,
+				byte(val>>24), byte(val>>16),
+				byte(val>>8), byte(val))
 		}
 	}
 
-	// --- 2. Always align to even length ---
+	// Pad to an even number of bytes for word conversion.
 	if len(bytesBuf)%2 != 0 {
 		bytesBuf = append(bytesBuf, 0)
 	}
 
-	// --- 3. If host is little-endian, swap pairs before converting ---
-	if cpu.IsLittleEndianHost() {
-		for i := 0; i < len(bytesBuf); i += 2 {
-			if i+1 < len(bytesBuf) {
-				bytesBuf[i], bytesBuf[i+1] = bytesBuf[i+1], bytesBuf[i]
+	// Manually convert the byte buffer to a word buffer WITHOUT endian swapping.
+	var words []uint16
+	for i := 0; i < len(bytesBuf); i += 2 {
+		word := (uint16(bytesBuf[i]) << 8) | uint16(bytesBuf[i+1])
+		words = append(words, word)
+	}
+	return words, nil
+}
+
+// splitDcValues handles mixed quoted strings and numbers correctly.
+type dcToken struct {
+	Value  string
+	Quoted bool
+}
+
+func splitDcValues(s string) []dcToken {
+	var tokens []dcToken
+	inQuote := false
+	var quoteChar rune
+	var cur strings.Builder
+	for _, c := range s {
+		switch c {
+		case '\'', '"':
+			if inQuote && rune(c) == quoteChar {
+				tokens = append(tokens, dcToken{Value: cur.String(), Quoted: true})
+				cur.Reset()
+				inQuote = false
+			} else if !inQuote {
+				inQuote = true
+				quoteChar = rune(c)
+			} else {
+				cur.WriteRune(c)
 			}
+		case ',':
+			if !inQuote {
+				if val := strings.TrimSpace(cur.String()); val != "" {
+					tokens = append(tokens, dcToken{Value: val})
+				}
+				cur.Reset()
+			} else {
+				cur.WriteRune(c)
+			}
+		default:
+			cur.WriteRune(c)
 		}
 	}
-
-	// --- 4. Convert bytes to words in big-endian order ---
-	return cpu.BytesToWords(bytesBuf), nil
+	if val := strings.TrimSpace(cur.String()); val != "" && !inQuote {
+		tokens = append(tokens, dcToken{Value: val})
+	}
+	return tokens
 }
 
 // getElementSize returns element size in bytes for data-storage directives.

@@ -23,7 +23,7 @@ func assembleMovep(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, e
 	var dataReg, addrReg, disp uint16
 
 	switch {
-	// --- Register → Memory ---
+	// Register → Memory
 	case src.Mode == cpu.ModeData && dst.Mode == cpu.ModeAddrDisp:
 		opword |= 0x0180 // direction bit set (to memory)
 		dataReg = src.Register
@@ -33,7 +33,7 @@ func assembleMovep(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, e
 		}
 		disp = dst.ExtensionWords[0]
 
-	// --- Memory → Register ---
+	// Memory → Register
 	case src.Mode == cpu.ModeAddrDisp && dst.Mode == cpu.ModeData:
 		opword |= 0x0100 // direction bit clear (to register)
 		dataReg = dst.Register
@@ -47,7 +47,7 @@ func assembleMovep(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, e
 		return nil, fmt.Errorf("invalid operand combination for MOVEP — must be Dx,d(An) or d(An),Dx")
 	}
 
-	// --- Size (.W or .L) ---
+	// Size (.W or .L)
 	switch mn.Size {
 	case cpu.SizeWord:
 		// default
@@ -57,7 +57,7 @@ func assembleMovep(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, e
 		return nil, fmt.Errorf("MOVEP only supports .W or .L sizes")
 	}
 
-	// --- Register fields ---
+	// Register fields
 	opword |= (dataReg << 9)
 	opword |= addrReg
 

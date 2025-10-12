@@ -12,26 +12,24 @@ func IsLittleEndianHost() bool {
 	return b[0] == 1
 }
 
-// WordsToBytes converts a slice of 16-bit words into a byte slice in big-endian format.
-// This is the standard serialization format for M68k machine code.
+// WordsToBytes converts a slice of 16-bit words to a big-endian byte slice.
 func WordsToBytes(words []uint16) []byte {
-	b := make([]byte, len(words)*2)
+	out := make([]byte, len(words)*2)
 	for i, w := range words {
-		binary.BigEndian.PutUint16(b[i*2:], w)
+		binary.BigEndian.PutUint16(out[i*2:], w)
 	}
-	return b
+	return out
 }
 
-// BytesToWords converts a slice of bytes in big-endian format into a slice of 16-bit words.
-// It assumes the byte slice has an even length.
+// BytesToWords interprets bytes as big-endian 16-bit words.
+// If an odd number of bytes is passed, the final byte is padded with 0.
 func BytesToWords(b []byte) []uint16 {
-	if len(b)&1 != 0 {
+	if len(b)%2 != 0 {
 		b = append(b, 0)
 	}
-	n := len(b) / 2
-	words := make([]uint16, n)
-	for i := 0; i < n; i++ {
-		words[i] = binary.BigEndian.Uint16(b[i*2:])
+	out := make([]uint16, len(b)/2)
+	for i := range out {
+		out[i] = binary.BigEndian.Uint16(b[i*2:])
 	}
-	return words
+	return out
 }

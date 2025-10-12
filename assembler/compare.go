@@ -21,7 +21,7 @@ func assembleCompare(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16,
 	}
 }
 
-// --- CMP / CMPA / CMPI ---
+// CMP / CMPA / CMPI
 
 func assembleCmpFamily(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
 	name := strings.ToLower(mn.Value)

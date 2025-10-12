@@ -29,29 +29,23 @@ func (o *Operand) IsImmediate() bool {
 	return o.Mode == cpu.ModeOther && o.Register == cpu.RegImmediate
 }
 
-// Regular expressions for operand recognition.
 var (
-	reDataRegister    = regexp.MustCompile(`(?i)^d([0-7])$`)
-	reAddressRegister = regexp.MustCompile(`(?i)^a([0-7])$`)
-	reAddressIndirect = regexp.MustCompile(`(?i)^\(a([0-7])\)$`)
-	reAddressPostInc  = regexp.MustCompile(`(?i)^\(a([0-7])\)\+$`)
-	reAddressPreDec   = regexp.MustCompile(`(?i)^-\(a([0-7])\)$`)
-	reAddressDisp     = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]+)\(a([0-7])\)$`)
-	reImmediate       = regexp.MustCompile(`(?i)^#(.+)$`)
-	// parenthesized absolute forms: ($val).w or ($val).l
+	reDataRegister       = regexp.MustCompile(`(?i)^d([0-7])$`)
+	reAddressRegister    = regexp.MustCompile(`(?i)^a([0-7])$`)
+	reAddressIndirect    = regexp.MustCompile(`(?i)^\(a([0-7])\)$`)
+	reAddressPostInc     = regexp.MustCompile(`(?i)^\(a([0-7])\)\+$`)
+	reAddressPreDec      = regexp.MustCompile(`(?i)^-\(a([0-7])\)$`)
+	reAddressDisp        = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]+)\(a([0-7])\)$`)
+	reImmediate          = regexp.MustCompile(`(?i)^#(.+)$`)
 	reAbsoluteParenShort = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.w$`)
 	reAbsoluteParenLong  = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.l$`)
-	// $hex.w or $hex.l
 	reAbsoluteDollarSize = regexp.MustCompile(`(?i)^\$([a-fA-F0-9]+)\.(w|l)$`)
 	reAddressIndex       = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(a([0-7]),(d|a)([0-7])\.(w|l)\)$`)
-	// PC-relative forms:
-	//   - parenthesized "(<disp>,pc)"  e.g. "($10,pc)" or "(label,pc)"
-	//   - non-parenthesized "label(pc)" or "$10(pc)"
-	rePCRelDispParen = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+),\s*pc\)$`)
-	rePCRelDisp      = regexp.MustCompile(`(?i)^([a-zA-Z0-9_\$\-%]+)\(pc\)$`)
-	rePCRelIndex     = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(pc,(d|a)([0-7])\.(w|l)\)$`)
-	reAbsoluteSimple = regexp.MustCompile(`(?i)^\$[a-fA-F0-9]+$`)
-	reLabel          = regexp.MustCompile(`(?i)^[a-z_][a-z0-9_]*$`)
+	rePCRelDispParen     = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+),\s*pc\)$`)
+	rePCRelDisp          = regexp.MustCompile(`(?i)^([a-zA-Z0-9_\$\-%]+)\(pc\)$`)
+	rePCRelIndex         = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]*)\(pc,(d|a)([0-7])\.(w|l)\)$`)
+	reAbsoluteSimple     = regexp.MustCompile(`(?i)^\$[a-fA-F0-9]+$`)
+	reLabel              = regexp.MustCompile(`(?i)^[a-z_][a-z0-9_]*$`)
 )
 
 // ParseMnemonic splits an instruction like "MOVE.W" → ("move", SizeWord).
@@ -79,12 +73,16 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 	lcs := strings.ToLower(s)
 
 	if lcs == "sr" || lcs == "ccr" || lcs == "usp" {
-		return Operand{Raw: lcs}, nil
+		op := Operand{Raw: s}
+		// Special value to identify these registers later
+		op.Mode = cpu.ModeOther
+		op.Register = 0xFFFF
+		return op, nil
 	}
 
 	op := Operand{Raw: s}
 
-	// --- Indexed and PC-relative index modes ---
+	// Indexed and PC-relative index modes
 	if m := reAddressIndex.FindStringSubmatch(s); m != nil {
 		return parseAddressIndex(m, asm)
 	}
@@ -92,7 +90,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return parsePCRelIndex(m, asm)
 	}
 
-	// --- Parenthesized PC-relative: (disp,pc) or (label,pc) ---
+	// Parenthesized PC-relative: (disp,pc) or (label,pc)
 	if m := rePCRelDispParen.FindStringSubmatch(s); m != nil {
 		inner := m[1]
 		// numeric displacement?
@@ -111,20 +109,18 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 
 	// PC relative displacement (label(pc) or $hex(pc))
 	if m := rePCRelDisp.FindStringSubmatch(s); m != nil {
+		op.Mode = cpu.ModeOther
+		op.Register = cpu.ModePCRelative // Mark as explicit PC-relative
 		inner := m[1]
 		if val, err := parseConstant(inner, asm); err == nil {
-			op.Mode = cpu.ModeOther
-			op.Register = cpu.ModePCRelative
 			op.ExtensionWords = []uint16{uint16(int16(val))}
-			return op, nil
+		} else {
+			op.Label = strings.ToLower(inner)
 		}
-		op.Mode = cpu.ModeOther
-		op.Register = cpu.ModePCRelative
-		op.Label = strings.ToLower(inner)
 		return op, nil
 	}
 
-	// --- Absolute short and long — parenthesized forms ( ($val).w / ($val).l ) ---
+	// Absolute short and long — parenthesized forms ( ($val).w / ($val).l )
 	if m := reAbsoluteParenShort.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
@@ -135,6 +131,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		op.ExtensionWords = []uint16{uint16(val)}
 		return op, nil
 	}
+
 	if m := reAbsoluteParenLong.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
@@ -146,7 +143,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return op, nil
 	}
 
-	// --- Absolute forms like $xxxx.w / $xxxx.l (support $hex.w / $hex.l) ---
+	// Absolute forms like $xxxx.w / $xxxx.l (support $hex.w / $hex.l)
 	if m := reAbsoluteDollarSize.FindStringSubmatch(s); m != nil {
 		valStr := m[1]
 		size := strings.ToLower(m[2])
@@ -165,37 +162,42 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return op, nil
 	}
 
-	// --- Registers and address modes ---
+	// Registers and address modes
 	if m := reDataRegister.FindStringSubmatch(s); m != nil {
 		reg, _ := strconv.Atoi(m[1])
 		op.Mode = cpu.ModeData
 		op.Register = uint16(reg)
 		return op, nil
 	}
+
 	if m := reAddressRegister.FindStringSubmatch(s); m != nil {
 		reg, _ := strconv.Atoi(m[1])
 		op.Mode = cpu.ModeAddr
 		op.Register = uint16(reg)
 		return op, nil
 	}
+
 	if m := reAddressIndirect.FindStringSubmatch(s); m != nil {
 		reg, _ := strconv.Atoi(m[1])
 		op.Mode = cpu.ModeAddrInd
 		op.Register = uint16(reg)
 		return op, nil
 	}
+
 	if m := reAddressPostInc.FindStringSubmatch(s); m != nil {
 		reg, _ := strconv.Atoi(m[1])
 		op.Mode = cpu.ModeAddrPostInc
 		op.Register = uint16(reg)
 		return op, nil
 	}
+
 	if m := reAddressPreDec.FindStringSubmatch(s); m != nil {
 		reg, _ := strconv.Atoi(m[1])
 		op.Mode = cpu.ModeAddrPreDec
 		op.Register = uint16(reg)
 		return op, nil
 	}
+
 	if m := reAddressDisp.FindStringSubmatch(s); m != nil {
 		disp, err := parseConstant(m[1], asm)
 		if err != nil {
@@ -209,7 +211,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return op, nil
 	}
 
-	// --- Immediate (#value) ---
+	// Immediate (#value)
 	if m := reImmediate.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
@@ -225,7 +227,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return op, nil
 	}
 
-	// --- Absolute numeric without explicit size (e.g. $DEAD) ---
+	// Absolute numeric without explicit size (e.g. $DEAD)
 	if m := reAbsoluteSimple.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[0], asm)
 		if err != nil {
@@ -243,11 +245,10 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		return op, nil
 	}
 
-	// --- Bare label ---
-	// Treat bare label as a PC-relative symbol placeholder: (d16,PC)
+	// Bare label (checked after all other patterns fail)
 	if reLabel.MatchString(s) {
 		op.Mode = cpu.ModeOther
-		op.Register = cpu.ModePCRelative
+		op.Register = RegLabel // Use the placeholder flag
 		op.Label = strings.ToLower(s)
 		return op, nil
 	}

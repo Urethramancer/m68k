@@ -64,7 +64,7 @@ start:
 * SECTION 2: Instruction Variety Demonstration
 *****************************************************************
 
-*--- Arithmetic Instructions ---
+* Arithmetic Instructions
 	add.l   d1,d0                 ; D0 = D0 + D1
 	subi.w  #100,d2               ; D2 = D2 - 100
 	mulu.w  d2,d3                 ; D3 = D3 * D2 (unsigned)
@@ -74,7 +74,7 @@ start:
 	ext.w   d0                    ; Extend sign bit of D0.b to D0.w
 	ext.l   d0                    ; Extend sign bit of D0.w to D0.l
 
-*--- Logical and Shift Instructions ---
+* Logical and Shift Instructions
 	andi.b  #%11110000,d0         ; Bitwise AND immediate
 	or.l    d1,d0                 ; Bitwise OR
 	eor.w   d2,d2                 ; Bitwise XOR (common way to clear a register to 0)
@@ -84,7 +84,7 @@ start:
 	rol.b   #1,d3                 ; Rotate Left (1 bit)
 	swap    d4                    ; Swap high and low words of D4
 
-*--- Data Movement Instructions ---
+* Data Movement Instructions
 	lea     mydata,a2             ; Load Effective Address of MyData into A2
 	pea     mydata(pc)            ; Push Effective Address onto stack
 	exg     d1,a1                 ; Exchange contents of D1 and A1
@@ -92,7 +92,7 @@ start:
 	movem.l d0-d3/a0-a2,-(sp)     ; Move multiple registers to the stack
 	movem.l (sp)+,d0-d3/a0-a2     ; Restore multiple registers from stack
 
-*--- Branch and Program Control ---
+* Branch and Program Control
 	cmp.w   d1,d2                 ; Compare D1 and D2, setting flags
 	beq.s   equallabel            ; Branch if Equal (short branch)
 	bne     notequallabel         ; Branch if Not Equal (long branch)

@@ -1,4 +1,4 @@
-; --- "even" data directive test ---
+; "even" data directive test
 start:
     dc.b    $11, $22, $33
     even

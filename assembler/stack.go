@@ -19,7 +19,7 @@ func assembleStack(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, e
 	}
 }
 
-// --- LINK ---
+// LINK
 
 // assembleLink assembles the LINK instruction.
 // Syntax: LINK An, #<displacement>
@@ -48,7 +48,7 @@ func assembleLink(operands []Operand) ([]uint16, error) {
 	return []uint16{opword, immOp.ExtensionWords[0]}, nil
 }
 
-// --- UNLK ---
+// UNLK
 
 // assembleUnlk assembles the UNLK instruction.
 // Syntax: UNLK An

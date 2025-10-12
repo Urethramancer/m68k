@@ -22,7 +22,7 @@ func assembleMisc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 }
 
-// --- STOP ---
+// STOP
 func assembleStop(operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("STOP requires one immediate operand")
@@ -37,7 +37,7 @@ func assembleStop(operands []Operand) ([]uint16, error) {
 	return []uint16{cpu.OPSTOP, src.ExtensionWords[0]}, nil
 }
 
-// --- RESET / NOP / ILLEGAL ---
+// RESET / NOP / ILLEGAL
 func assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 0 {
 		return nil, fmt.Errorf("%s requires no operands", strings.ToUpper(mn.Value))
@@ -54,7 +54,7 @@ func assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 }
 
-// --- EXG ---
+// EXG
 func assembleExg(operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("EXG requires 2 operands")
@@ -79,7 +79,7 @@ func assembleExg(operands []Operand) ([]uint16, error) {
 	return []uint16{opword}, nil
 }
 
-// --- One-operand instructions ---
+// One-operand instructions
 func assembleMiscOneOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("%s requires 1 operand", strings.ToUpper(mn.Value))
