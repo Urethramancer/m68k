@@ -36,6 +36,10 @@ func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, 
 		case strings.EqualFold(op1.Raw, "sr"):
 			return assembleMoveFromSr(op2)
 
+		case strings.EqualFold(op1.Raw, "ccr"):
+			// Assembles identically to MOVE from SR, the user just needs to mask the bits
+			return assembleMoveFromSr(op2)
+
 		// MOVE <ea>, USP
 		case strings.EqualFold(op2.Raw, "usp"):
 			return assembleMoveToUsp(op1)
