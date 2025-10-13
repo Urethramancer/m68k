@@ -68,88 +68,169 @@ func ParseMnemonic(s string) (Mnemonic, error) {
 }
 
 // parseOperand converts an operand string into a structured Operand.
+// It acts as a dispatcher, trying different logical groups of addressing modes in order.
 func parseOperand(s string, asm *Assembler) (Operand, error) {
 	s = strings.TrimSpace(s)
-	lcs := strings.ToLower(s)
 
-	if lcs == "sr" || lcs == "ccr" || lcs == "usp" {
-		op := Operand{Raw: s}
-		// Special value to identify these registers later
-		op.Mode = cpu.ModeOther
-		op.Register = RegStatus
-		return op, nil
+	// Handle special registers first
+	if op, ok, err := tryParseStatusReg(s); ok || err != nil {
+		return op, err
 	}
 
-	op := Operand{Raw: s}
+	// Try each group of modes in a specific order to avoid ambiguity.
+	// More complex/specific patterns should be tried before more general ones.
+	if op, ok, err := tryParseIndexedModes(s, asm); ok || err != nil {
+		return op, err
+	}
+	if op, ok, err := tryParseRegisterModes(s, asm); ok || err != nil {
+		return op, err
+	}
+	if op, ok, err := tryParsePCModes(s, asm); ok || err != nil {
+		return op, err
+	}
+	if op, ok, err := tryParseAbsoluteModes(s, asm); ok || err != nil {
+		return op, err
+	}
+	if op, ok, err := tryParseImmediateMode(s, asm); ok || err != nil {
+		return op, err
+	}
 
-	// Indexed and PC-relative index modes
+	// Finally, if nothing else matches, check if it's a bare label.
+	if op, ok, err := tryParseBareLabel(s); ok || err != nil {
+		return op, err
+	}
+
+	return Operand{}, fmt.Errorf("unknown operand format: %s", s)
+}
+
+// --- Helper Functions for Parsing Operand Groups ---
+
+// tryParseStatusReg handles sr, ccr, and usp.
+func tryParseStatusReg(s string) (Operand, bool, error) {
+	lcs := strings.ToLower(s)
+	if lcs == "sr" || lcs == "ccr" || lcs == "usp" {
+		op := Operand{Raw: s, Mode: cpu.ModeOther, Register: RegStatus}
+		return op, true, nil
+	}
+	return Operand{}, false, nil
+}
+
+// tryParseIndexedModes handles (d8,An,Xn) and (d8,PC,Xn).
+func tryParseIndexedModes(s string, asm *Assembler) (Operand, bool, error) {
 	if m := reAddressIndex.FindStringSubmatch(s); m != nil {
-		return parseAddressIndex(m, asm)
+		op, err := parseAddressIndex(m, asm)
+		return op, true, err
 	}
 	if m := rePCRelIndex.FindStringSubmatch(s); m != nil {
-		return parsePCRelIndex(m, asm)
+		op, err := parsePCRelIndex(m, asm)
+		return op, true, err
 	}
+	return Operand{}, false, nil
+}
 
-	// Parenthesized PC-relative: (disp,pc) or (label,pc)
-	if m := rePCRelDispParen.FindStringSubmatch(s); m != nil {
-		inner := m[1]
-		// numeric displacement?
-		if val, err := parseConstant(inner, asm); err == nil {
-			op.Mode = cpu.ModeOther
-			op.Register = cpu.ModePCRelative
-			op.ExtensionWords = []uint16{uint16(int16(val))}
-			return op, nil
+// tryParseRegisterModes handles Dn, An, (An), (An)+, -(An), and (d16,An).
+func tryParseRegisterModes(s string, asm *Assembler) (Operand, bool, error) {
+	op := Operand{Raw: s}
+	if m := reDataRegister.FindStringSubmatch(s); m != nil {
+		reg, _ := strconv.Atoi(m[1])
+		op.Mode = cpu.ModeData
+		op.Register = uint16(reg)
+		return op, true, nil
+	}
+	if m := reAddressRegister.FindStringSubmatch(s); m != nil {
+		reg, _ := strconv.Atoi(m[1])
+		op.Mode = cpu.ModeAddr
+		op.Register = uint16(reg)
+		return op, true, nil
+	}
+	if m := reAddressIndirect.FindStringSubmatch(s); m != nil {
+		reg, _ := strconv.Atoi(m[1])
+		op.Mode = cpu.ModeAddrInd
+		op.Register = uint16(reg)
+		return op, true, nil
+	}
+	if m := reAddressPostInc.FindStringSubmatch(s); m != nil {
+		reg, _ := strconv.Atoi(m[1])
+		op.Mode = cpu.ModeAddrPostInc
+		op.Register = uint16(reg)
+		return op, true, nil
+	}
+	if m := reAddressPreDec.FindStringSubmatch(s); m != nil {
+		reg, _ := strconv.Atoi(m[1])
+		op.Mode = cpu.ModeAddrPreDec
+		op.Register = uint16(reg)
+		return op, true, nil
+	}
+	if m := reAddressDisp.FindStringSubmatch(s); m != nil {
+		disp, err := parseConstant(m[1], asm)
+		if err != nil {
+			return op, false, err
 		}
-		// otherwise treat as a label to be resolved later
+		reg, _ := strconv.Atoi(m[2])
+		op.Mode = cpu.ModeAddrDisp
+		op.Register = uint16(reg)
+		op.ExtensionWords = []uint16{uint16(int16(disp))}
+		return op, true, nil
+	}
+	return Operand{}, false, nil
+}
+
+// tryParsePCModes handles (label,pc) and label(pc).
+func tryParsePCModes(s string, asm *Assembler) (Operand, bool, error) {
+	op := Operand{Raw: s}
+	if m := rePCRelDispParen.FindStringSubmatch(s); m != nil {
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.ModePCRelative
-		op.Label = strings.ToLower(inner)
-		return op, nil
-	}
-
-	// PC relative displacement (label(pc) or $hex(pc))
-	if m := rePCRelDisp.FindStringSubmatch(s); m != nil {
-		op.Mode = cpu.ModeOther
-		op.Register = cpu.ModePCRelative // Mark as explicit PC-relative
 		inner := m[1]
 		if val, err := parseConstant(inner, asm); err == nil {
 			op.ExtensionWords = []uint16{uint16(int16(val))}
 		} else {
 			op.Label = strings.ToLower(inner)
 		}
-		return op, nil
+		return op, true, nil
 	}
+	if m := rePCRelDisp.FindStringSubmatch(s); m != nil {
+		op.Mode = cpu.ModeOther
+		op.Register = cpu.ModePCRelative
+		inner := m[1]
+		if val, err := parseConstant(inner, asm); err == nil {
+			op.ExtensionWords = []uint16{uint16(int16(val))}
+		} else {
+			op.Label = strings.ToLower(inner)
+		}
+		return op, true, nil
+	}
+	return Operand{}, false, nil
+}
 
-	// Absolute short and long — parenthesized forms ( ($val).w / ($val).l )
+// tryParseAbsoluteModes handles all absolute addressing forms.
+func tryParseAbsoluteModes(s string, asm *Assembler) (Operand, bool, error) {
+	op := Operand{Raw: s}
 	if m := reAbsoluteParenShort.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
-			return op, err
+			return op, false, err
 		}
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.RegAbsShort
 		op.ExtensionWords = []uint16{uint16(val)}
-		return op, nil
+		return op, true, nil
 	}
-
 	if m := reAbsoluteParenLong.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[1], asm)
 		if err != nil {
-			return op, err
+			return op, false, err
 		}
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.RegAbsLong
 		op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
-		return op, nil
+		return op, true, nil
 	}
-
-	// Absolute forms like $xxxx.w / $xxxx.l (support $hex.w / $hex.l)
 	if m := reAbsoluteDollarSize.FindStringSubmatch(s); m != nil {
-		valStr := m[1]
-		size := strings.ToLower(m[2])
+		valStr, size := m[1], strings.ToLower(m[2])
 		val, err := strconv.ParseInt(valStr, 16, 64)
 		if err != nil {
-			return op, fmt.Errorf("invalid hex constant: %s", valStr)
+			return op, false, fmt.Errorf("invalid hex constant: %s", valStr)
 		}
 		op.Mode = cpu.ModeOther
 		if size == "w" {
@@ -159,79 +240,12 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 			op.Register = cpu.RegAbsLong
 			op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
 		}
-		return op, nil
+		return op, true, nil
 	}
-
-	// Registers and address modes
-	if m := reDataRegister.FindStringSubmatch(s); m != nil {
-		reg, _ := strconv.Atoi(m[1])
-		op.Mode = cpu.ModeData
-		op.Register = uint16(reg)
-		return op, nil
-	}
-
-	if m := reAddressRegister.FindStringSubmatch(s); m != nil {
-		reg, _ := strconv.Atoi(m[1])
-		op.Mode = cpu.ModeAddr
-		op.Register = uint16(reg)
-		return op, nil
-	}
-
-	if m := reAddressIndirect.FindStringSubmatch(s); m != nil {
-		reg, _ := strconv.Atoi(m[1])
-		op.Mode = cpu.ModeAddrInd
-		op.Register = uint16(reg)
-		return op, nil
-	}
-
-	if m := reAddressPostInc.FindStringSubmatch(s); m != nil {
-		reg, _ := strconv.Atoi(m[1])
-		op.Mode = cpu.ModeAddrPostInc
-		op.Register = uint16(reg)
-		return op, nil
-	}
-
-	if m := reAddressPreDec.FindStringSubmatch(s); m != nil {
-		reg, _ := strconv.Atoi(m[1])
-		op.Mode = cpu.ModeAddrPreDec
-		op.Register = uint16(reg)
-		return op, nil
-	}
-
-	if m := reAddressDisp.FindStringSubmatch(s); m != nil {
-		disp, err := parseConstant(m[1], asm)
-		if err != nil {
-			return op, err
-		}
-		reg, _ := strconv.Atoi(m[2])
-		op.Mode = cpu.ModeAddrDisp
-		op.Register = uint16(reg)
-		// Use signed 16-bit displacement stored as a single extension word
-		op.ExtensionWords = []uint16{uint16(int16(disp))}
-		return op, nil
-	}
-
-	// Immediate (#value)
-	if m := reImmediate.FindStringSubmatch(s); m != nil {
-		val, err := parseConstant(m[1], asm)
-		if err != nil {
-			return op, err
-		}
-		op.Mode = cpu.ModeOther
-		op.Register = cpu.RegImmediate
-		if val > 0xFFFF || val < -32768 {
-			op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
-		} else {
-			op.ExtensionWords = []uint16{uint16(val)}
-		}
-		return op, nil
-	}
-
-	// Absolute numeric without explicit size (e.g. $DEAD)
 	if m := reAbsoluteSimple.FindStringSubmatch(s); m != nil {
 		val, err := parseConstant(m[0], asm)
 		if err != nil {
-			return op, err
+			return op, false, err
 		}
 		if val <= 0xFFFF {
 			op.Mode = cpu.ModeOther
@@ -242,18 +256,43 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 			op.Register = cpu.RegAbsLong
 			op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
 		}
-		return op, nil
+		return op, true, nil
 	}
+	return Operand{}, false, nil
+}
 
-	// Bare label (checked after all other patterns fail)
-	if reLabel.MatchString(s) {
+// tryParseImmediateMode handles #<data>.
+func tryParseImmediateMode(s string, asm *Assembler) (Operand, bool, error) {
+	op := Operand{Raw: s}
+	if m := reImmediate.FindStringSubmatch(s); m != nil {
+		val, err := parseConstant(m[1], asm)
+		if err != nil {
+			return op, false, err
+		}
 		op.Mode = cpu.ModeOther
-		op.Register = RegLabel // Use the placeholder flag
-		op.Label = strings.ToLower(s)
-		return op, nil
+		op.Register = cpu.RegImmediate
+		if val > 0xFFFF || val < -32768 {
+			op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
+		} else {
+			op.ExtensionWords = []uint16{uint16(val)}
+		}
+		return op, true, nil
 	}
+	return Operand{}, false, nil
+}
 
-	return op, fmt.Errorf("unknown operand format: %s", s)
+// tryParseBareLabel handles an operand that is just a label.
+func tryParseBareLabel(s string) (Operand, bool, error) {
+	if reLabel.MatchString(s) {
+		op := Operand{
+			Raw:      s,
+			Mode:     cpu.ModeOther,
+			Register: RegLabel,
+			Label:    strings.ToLower(s),
+		}
+		return op, true, nil
+	}
+	return Operand{}, false, nil
 }
 
 // parseAddressIndex handles (d8,An,Xn)
