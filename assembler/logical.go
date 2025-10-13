@@ -22,6 +22,29 @@ func assembleLogical(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16,
 	return nil, fmt.Errorf("unknown logical instruction: %s", mn.Value)
 }
 
+// assembleLogicalImmediate is a helper for ANDI, ORI, and EORI.
+func assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, src, dst Operand) ([]uint16, error) {
+	opword, err := setOpwordSize(baseOpcode, mn.Size, SizeBitsSingleOp)
+	if err != nil {
+		return nil, err
+	}
+
+	eaBits, eaExt, err := encodeEA(dst)
+	if err != nil {
+		return nil, err
+	}
+	opword |= eaBits
+
+	words := []uint16{opword}
+	if len(src.ExtensionWords) > 0 {
+		words = append(words, src.ExtensionWords...)
+	}
+	if len(eaExt) > 0 {
+		words = append(words, eaExt...)
+	}
+	return words, nil
+}
+
 func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("AND requires 2 operands")
@@ -30,40 +53,17 @@ func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 
 	// Immediate variant: ANDI #imm, <ea>
 	if src.IsImmediate() {
-		opword := uint16(cpu.OPANDI)
-		var err error
-		opword, err = setOpwordSize(opword, mn.Size, SizeBitsSingleOp)
-		if err != nil {
-			return nil, err
-		}
-
-		eaBits, eaExt, err := encodeEA(dst)
-		if err != nil {
-			return nil, err
-		}
-		opword |= eaBits
-
-		words := []uint16{opword}
-		if len(src.ExtensionWords) > 0 {
-			words = append(words, src.ExtensionWords...)
-		}
-		if len(eaExt) > 0 {
-			words = append(words, eaExt...)
-		}
-		return words, nil
+		return assembleLogicalImmediate(cpu.OPANDI, mn, src, dst)
 	}
 
 	// Non-immediate AND Dn,<ea> or <ea>,Dn
-	opword := uint16(cpu.OPAND)
-	var err error
-	opword, err = setOpwordSize(opword, mn.Size, SizeBits)
+	opword, err := setOpwordSize(cpu.OPAND, mn.Size, SizeBits)
 	if err != nil {
 		return nil, err
 	}
 
 	var eaBits uint16
 	var eaExt []uint16
-
 	if dst.Mode == cpu.ModeData {
 		// Direction: <ea> -> Dn
 		opword |= (dst.Register << 9)
@@ -79,11 +79,7 @@ func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	}
 	opword |= eaBits
 
-	words := []uint16{opword}
-	if len(eaExt) > 0 {
-		words = append(words, eaExt...)
-	}
-	return words, nil
+	return append([]uint16{opword}, eaExt...), nil
 }
 
 func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
@@ -94,40 +90,17 @@ func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, erro
 
 	// Immediate variant: ORI #imm, <ea>
 	if src.IsImmediate() {
-		opword := uint16(cpu.OPORI)
-		var err error
-		opword, err = setOpwordSize(opword, mn.Size, SizeBitsSingleOp)
-		if err != nil {
-			return nil, err
-		}
-
-		eaBits, eaExt, err := encodeEA(dst)
-		if err != nil {
-			return nil, err
-		}
-		opword |= eaBits
-
-		words := []uint16{opword}
-		if len(src.ExtensionWords) > 0 {
-			words = append(words, src.ExtensionWords...)
-		}
-		if len(eaExt) > 0 {
-			words = append(words, eaExt...)
-		}
-		return words, nil
+		return assembleLogicalImmediate(cpu.OPORI, mn, src, dst)
 	}
 
 	// Non-immediate OR Dn,<ea> or <ea>,Dn
-	opword := uint16(cpu.OPOR)
-	var err error
-	opword, err = setOpwordSize(opword, mn.Size, SizeBits)
+	opword, err := setOpwordSize(cpu.OPOR, mn.Size, SizeBits)
 	if err != nil {
 		return nil, err
 	}
 
 	var eaBits uint16
 	var eaExt []uint16
-
 	if dst.Mode == cpu.ModeData {
 		// Direction: <ea> -> Dn
 		opword |= (dst.Register << 9)
@@ -143,11 +116,7 @@ func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, erro
 	}
 	opword |= eaBits
 
-	words := []uint16{opword}
-	if len(eaExt) > 0 {
-		words = append(words, eaExt...)
-	}
-	return words, nil
+	return append([]uint16{opword}, eaExt...), nil
 }
 
 func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
@@ -158,27 +127,7 @@ func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 
 	// Immediate variant: EORI #imm, <ea>
 	if src.IsImmediate() {
-		opword := uint16(cpu.OPEORI)
-		var err error
-		opword, err = setOpwordSize(opword, mn.Size, SizeBitsSingleOp)
-		if err != nil {
-			return nil, err
-		}
-
-		eaBits, eaExt, err := encodeEA(dst)
-		if err != nil {
-			return nil, err
-		}
-		opword |= eaBits
-
-		words := []uint16{opword}
-		if len(src.ExtensionWords) > 0 {
-			words = append(words, src.ExtensionWords...)
-		}
-		if len(eaExt) > 0 {
-			words = append(words, eaExt...)
-		}
-		return words, nil
+		return assembleLogicalImmediate(cpu.OPEORI, mn, src, dst)
 	}
 
 	// Non-immediate EOR: must be Dn -> <ea>
@@ -187,7 +136,6 @@ func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	}
 
 	opword := uint16(cpu.OPEOR)
-	// EOR uses its own size encoding (not the same helper map)
 	sz := mn.Size
 	if sz == cpu.SizeInvalid {
 		sz = cpu.SizeWord
@@ -211,11 +159,7 @@ func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	}
 	opword |= eaBits
 
-	words := []uint16{opword}
-	if len(eaExt) > 0 {
-		words = append(words, eaExt...)
-	}
-	return words, nil
+	return append([]uint16{opword}, eaExt...), nil
 }
 
 func assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
@@ -224,9 +168,7 @@ func assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 	dst := operands[0]
 
-	opword := uint16(cpu.OPNOT)
-	var err error
-	opword, err = setOpwordSize(opword, mn.Size, SizeBitsSingleOp)
+	opword, err := setOpwordSize(cpu.OPNOT, mn.Size, SizeBitsSingleOp)
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +179,5 @@ func assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 	opword |= eaBits
 
-	words := []uint16{opword}
-	if len(eaExt) > 0 {
-		words = append(words, eaExt...)
-	}
-	return words, nil
+	return append([]uint16{opword}, eaExt...), nil
 }
