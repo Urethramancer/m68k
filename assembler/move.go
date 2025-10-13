@@ -76,9 +76,6 @@ func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([
 		return nil, fmt.Errorf("unsupported MOVE size")
 	}
 
-	// The original code used `opword |= (dstBits << 6)`, which was incorrect.
-	// The correct encoding requires placing the destination mode and register
-	// into separate bitfields.
 	srcBits, srcExt, err := encodeEA(src)
 	if err != nil {
 		return nil, err
@@ -89,7 +86,7 @@ func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([
 		return nil, err
 	}
 
-	// Correctly assemble the MOVE opword:
+	// Assemble the MOVE opword:
 	// Bits 11-9: Destination Register
 	// Bits 8-6:  Destination Mode
 	// Bits 5-0:  Source EA (Mode and Register)
