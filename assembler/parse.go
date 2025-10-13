@@ -76,7 +76,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 		op := Operand{Raw: s}
 		// Special value to identify these registers later
 		op.Mode = cpu.ModeOther
-		op.Register = 0xFFFF
+		op.Register = RegStatus
 		return op, nil
 	}
 

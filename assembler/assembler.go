@@ -7,8 +7,12 @@ import (
 	"github.com/Urethramancer/m68k/cpu"
 )
 
-// RegLabel is a placeholder register value indicating a label to be resolved.
-const RegLabel = 0xFE
+const (
+	// RegLabel is a placeholder register value indicating a label to be resolved.
+	RegLabel = 0xFE
+	// RegStatus is a placeholder register value indicating a status register (SR/CCR/USP).
+	RegStatus = 0xFFFF
+)
 
 // Assembler holds the state for the assembly process.
 type Assembler struct {
