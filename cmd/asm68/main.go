@@ -1,27 +1,11 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 
 	"github.com/Urethramancer/m68k/assembler"
 )
-
-// isLittleEndian reports whether the current system uses little-endian byte order.
-func isLittleEndian() bool {
-	var x uint16 = 1
-	b := [2]byte{}
-	binary.LittleEndian.PutUint16(b[:], x)
-	return b[0] == 1
-}
-
-// swapToBigEndian ensures the output is in M68K big-endian word order.
-func swapToBigEndian(code []byte) {
-	for i := 0; i+1 < len(code); i += 2 {
-		code[i], code[i+1] = code[i+1], code[i]
-	}
-}
 
 func main() {
 	if len(os.Args) < 2 || len(os.Args) > 3 {
@@ -46,11 +30,6 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Assembly error: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Always output M68K big-endian
-	if isLittleEndian() {
-		swapToBigEndian(code)
 	}
 
 	if outputFile == "" {

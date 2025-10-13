@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Urethramancer/m68k/cpu"
 	"github.com/Urethramancer/m68k/disassembler"
 )
 
@@ -20,20 +19,14 @@ func main() {
 		outputFile = os.Args[2]
 	}
 
+	// Read the binary file directly. Do NOT modify it.
 	code, err := os.ReadFile(inputFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading input file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Ensure M68K big-endian order
-	if cpu.IsLittleEndianHost() {
-		for i := 0; i+1 < len(code); i += 2 {
-			code[i], code[i+1] = code[i+1], code[i]
-		}
-	}
-
-	// Perform unified full disassembly
+	// Pass the clean, unmodified, big-endian byte slice to the disassembler.
 	text, err := disassembler.Disassemble(code)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Disassembly error: %v\n", err)
@@ -45,7 +38,6 @@ func main() {
 		return
 	}
 
-	// Write to file
 	if err := os.WriteFile(outputFile, []byte(text), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
 		os.Exit(1)
