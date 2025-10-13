@@ -102,7 +102,7 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 	return Operand{}, fmt.Errorf("unknown operand format: %s", s)
 }
 
-// --- Helper Functions for Parsing Operand Groups ---
+// Helper Functions for Parsing Operand Groups
 
 // tryParseStatusReg handles sr, ccr, and usp.
 func tryParseStatusReg(s string) (Operand, bool, error) {
