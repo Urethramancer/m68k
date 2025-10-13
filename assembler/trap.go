@@ -8,7 +8,6 @@ import (
 )
 
 // assembleTrap handles TRAP and TRAPV instructions.
-// (RTE is now handled in flow.go with other return instructions.)
 func assembleTrap(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "trap":
