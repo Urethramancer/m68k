@@ -49,14 +49,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	src := os.Args[1]
 	var fn string
 	if len(os.Args) == 3 {
 		fn = os.Args[2]
 	}
 
 	// Read the binary file directly. Do NOT modify it.
-	code, err := os.ReadFile(src)
+	code, err := os.ReadFile(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading input file: %v\n", err)
 		os.Exit(1)
