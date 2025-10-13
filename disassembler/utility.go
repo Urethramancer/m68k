@@ -213,3 +213,13 @@ func formatDisp(v int64) string {
 	}
 	return fmt.Sprintf("%d", v)
 }
+
+// labelName generates a label string based on the address and its context.
+func labelName(addr uint32, labelType LabelType) string {
+	prefix := "loc_"
+	switch labelType {
+	case SubroutineEntry:
+		prefix = "sub_"
+	}
+	return fmt.Sprintf("%s%04X", prefix, addr)
+}

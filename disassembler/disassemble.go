@@ -8,6 +8,16 @@ import (
 	"github.com/Urethramancer/m68k/cpu"
 )
 
+// LabelType defines the context of a label.
+type LabelType int
+
+const (
+	// JumpTarget is for a simple branch (BRA, BNE, etc.).
+	JumpTarget LabelType = iota
+	// SubroutineEntry is for a JSR or BSR target.
+	SubroutineEntry
+)
+
 // Instruction represents a single decoded instruction at a specific address.
 type Instruction struct {
 	Address  uint32
@@ -24,22 +34,16 @@ func Disassemble(code []byte) (string, error) {
 		return "", nil
 	}
 
-	// Linear Sweep
-	// Disassemble every word as a potential instruction.
+	// --- STAGE 1: Linear Sweep ---
 	instructions := make(map[uint32]*Instruction)
 	for pc := 0; pc+1 < len(code); {
 		addr := uint32(pc)
 		op := binary.BigEndian.Uint16(code[pc:])
-
-		// Create a temporary slice for the decoder to read extension words from.
-		// pc+2 ensures it doesn't read its own opcode.
 		var extensions []byte
 		if pc+2 < len(code) {
 			extensions = code[pc+2:]
 		}
-
 		mn, ops, used := decode(op, 0, extensions)
-
 		inst := &Instruction{
 			Address:  addr,
 			Op:       op,
@@ -48,15 +52,13 @@ func Disassemble(code []byte) (string, error) {
 			Size:     uint32(2 + used),
 		}
 		instructions[addr] = inst
-
-		// Move to the next word boundary.
 		pc += 2
 	}
 
-	// Control Flow Analysis
-	// Trace execution from the entry point to find all reachable code.
+	// --- STAGE 2: Control Flow Analysis ---
+	labelTargets := make(map[uint32]LabelType)
 	q := newQueue()
-	q.push(0) // Start at address 0
+	q.push(0)
 
 	for {
 		addr, ok := q.pop()
@@ -66,57 +68,55 @@ func Disassemble(code []byte) (string, error) {
 
 		inst, exists := instructions[addr]
 		if !exists || inst.IsCode {
-			continue // Already processed or not a valid instruction boundary
+			continue
 		}
 		inst.IsCode = true
 
-		// Add the next instruction in the linear flow to the queue,
-		// unless this instruction terminates the flow.
 		if !isTerminal(inst.Mnemonic) {
 			q.push(addr + inst.Size)
 		}
 
-		// If it's a branch or jump, add the target address to the queue.
-		if isBranchMnemonic(inst.Mnemonic) || inst.Mnemonic == "jsr" || inst.Mnemonic == "jmp" {
+		isSubroutineCall := inst.Mnemonic == "jsr" || inst.Mnemonic == "bsr"
+		if isBranchMnemonic(inst.Mnemonic) || isSubroutineCall {
 			offsetPC := inst.Address + 2
+			var target int64 = -1
 
-			// Try to parse branch offset
 			if isBranchMnemonic(inst.Mnemonic) {
 				offset := parseBranchOffset(inst.Operands)
-				target := int64(offsetPC) + int64(offset)
-				if target >= 0 {
-					q.push(uint32(target))
-				}
+				target = int64(offsetPC) + int64(offset)
+			}
+			if addr := parseAbsoluteAddress(inst.Operands); addr >= 0 {
+				target = int64(addr)
 			}
 
-			// Try to parse absolute JMP/JSR address
-			if addr := parseAbsoluteAddress(inst.Operands); addr >= 0 {
-				q.push(uint32(addr))
+			if target >= 0 {
+				targetAddr := uint32(target)
+				q.push(targetAddr)
+				if isSubroutineCall {
+					labelTargets[targetAddr] = SubroutineEntry
+				} else if _, exists := labelTargets[targetAddr]; !exists {
+					labelTargets[targetAddr] = JumpTarget
+				}
 			}
 		}
 	}
 
-	// Render final output
+	// --- STAGE 3: Render Final Output ---
 	var out strings.Builder
 	stringCounter := 1
 	pc := uint32(0)
 	totalLen := uint32(len(code))
 
-	// Build a map of all code addresses for easy lookup.
-	codeAddrs := make(map[uint32]bool)
-	for _, inst := range instructions {
-		if inst.IsCode {
-			codeAddrs[inst.Address] = true
-		}
-	}
-
 	for pc < totalLen {
-		// If the current PC is not the start of a valid code instruction,
-		// find the end of this data block and format it.
-		if !codeAddrs[pc] {
+		// If the current address is not marked as code, find the end of the
+		// data block and pass it to the data analyzer.
+		if inst, isCode := instructions[pc]; !isCode || !inst.IsCode {
 			dataStart := pc
 			dataEnd := dataStart
-			for dataEnd < totalLen && !codeAddrs[dataEnd] {
+			for dataEnd < totalLen {
+				if inst, isCode := instructions[dataEnd]; isCode && inst.IsCode {
+					break
+				}
 				dataEnd++
 			}
 			out.WriteString(analyzeAndFormatData(code[dataStart:dataEnd], dataStart, &stringCounter))
@@ -124,23 +124,39 @@ func Disassemble(code []byte) (string, error) {
 			continue
 		}
 
-		// This is a valid code instruction.
-		inst := instructions[pc]
-
-		// In this simplified model, labels are generated on the fly.
-		// A more advanced version would build a label map here.
-		out.WriteString(fmt.Sprintf("loc_%04X:\n", inst.Address))
-
-		// Print this instruction and all subsequent contiguous instructions.
-		for pc < totalLen && codeAddrs[pc] {
-			inst = instructions[pc]
-			if inst.Operands != "" {
-				fmt.Fprintf(&out, "    %-8s %s\n", inst.Mnemonic, inst.Operands)
-			} else {
-				fmt.Fprintf(&out, "    %s\n", inst.Mnemonic)
-			}
-			pc += inst.Size
+		// It's a code instruction. Check if a label needs to be printed.
+		if labelType, exists := labelTargets[pc]; exists {
+			fmt.Fprintf(&out, "%s:\n", labelName(pc, labelType))
 		}
+
+		// Get the instruction and print it.
+		inst := instructions[pc]
+		finalOperands := inst.Operands
+		if isBranchMnemonic(inst.Mnemonic) || inst.Mnemonic == "jsr" {
+			offsetPC := inst.Address + 2
+			var target int64 = -1
+			if isBranchMnemonic(inst.Mnemonic) {
+				offset := parseBranchOffset(inst.Operands)
+				target = int64(offsetPC) + int64(offset)
+			}
+			if addr := parseAbsoluteAddress(inst.Operands); addr >= 0 {
+				target = int64(addr)
+			}
+			if target >= 0 {
+				if labelType, exists := labelTargets[uint32(target)]; exists {
+					finalOperands = labelName(uint32(target), labelType)
+				}
+			}
+		}
+
+		if finalOperands != "" {
+			fmt.Fprintf(&out, "    %-8s %s\n", inst.Mnemonic, finalOperands)
+		} else {
+			fmt.Fprintf(&out, "    %s\n", inst.Mnemonic)
+		}
+
+		// Advance PC by the size of this single instruction.
+		pc += inst.Size
 	}
 
 	return out.String(), nil
