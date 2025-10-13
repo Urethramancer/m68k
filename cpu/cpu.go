@@ -50,6 +50,8 @@ const (
 	SRS = 1 << 13
 	// SR_T is trace mode
 	SRT = 1 << 15
+	// SRI combines interrupt levels
+	SRI = SRI0 | SRI1 | SRI2
 )
 
 // New creates a new CPU instance with given memory size.
@@ -70,10 +72,4 @@ func (c *CPU) Execute() error {
 
 	// Placeholder
 	return nil
-}
-
-// LoadCode to specified address.
-func (c *CPU) LoadCode(addr uint32, code []byte) {
-	copy(c.Mem[addr:], code)
-	c.PC = addr
 }
