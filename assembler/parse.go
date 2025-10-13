@@ -36,7 +36,6 @@ var (
 	reAddressPostInc     = regexp.MustCompile(`(?i)^\(a([0-7])\)\+$`)
 	reAddressPreDec      = regexp.MustCompile(`(?i)^-\(a([0-7])\)$`)
 	reAddressDisp        = regexp.MustCompile(`(?i)^([a-fA-F0-9\$\-%]+)\(a([0-7])\)$`)
-	reImmediate          = regexp.MustCompile(`(?i)^#(.+)$`)
 	reAbsoluteParenShort = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.w$`)
 	reAbsoluteParenLong  = regexp.MustCompile(`(?i)^\(([a-fA-F0-9\$\-%]+)\)\.l$`)
 	reAbsoluteDollarSize = regexp.MustCompile(`(?i)^\$([a-fA-F0-9]+)\.(w|l)$`)
@@ -262,23 +261,26 @@ func tryParseAbsoluteModes(s string, asm *Assembler) (Operand, bool, error) {
 }
 
 // tryParseImmediateMode handles #<data>.
+// tryParseImmediateMode handles #<data>.
 func tryParseImmediateMode(s string, asm *Assembler) (Operand, bool, error) {
-	op := Operand{Raw: s}
-	if m := reImmediate.FindStringSubmatch(s); m != nil {
-		val, err := parseConstant(m[1], asm)
-		if err != nil {
-			return op, false, err
-		}
-		op.Mode = cpu.ModeOther
-		op.Register = cpu.RegImmediate
-		if val > 0xFFFF || val < -32768 {
-			op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
-		} else {
-			op.ExtensionWords = []uint16{uint16(val)}
-		}
-		return op, true, nil
+	if !strings.HasPrefix(s, "#") {
+		return Operand{}, false, nil
 	}
-	return Operand{}, false, nil
+
+	op := Operand{Raw: s}
+	val, err := parseConstant(s[1:], asm) // Parse the string after the '#'
+	if err != nil {
+		return op, false, err
+	}
+
+	op.Mode = cpu.ModeOther
+	op.Register = cpu.RegImmediate
+	if val > 0xFFFF || val < -32768 {
+		op.ExtensionWords = []uint16{uint16(val >> 16), uint16(val)}
+	} else {
+		op.ExtensionWords = []uint16{uint16(val)}
+	}
+	return op, true, nil
 }
 
 // tryParseBareLabel handles an operand that is just a label.
