@@ -23,6 +23,11 @@ type Assembler struct {
 	opSize      int // Current operation size in bytes
 }
 
+// BaseAddress returns the base address configured for code to load and start at.
+func (asm *Assembler) BaseAddress() uint32 {
+	return asm.baseAddress
+}
+
 // New creates a new Assembler instance.
 func New() *Assembler {
 	return &Assembler{
