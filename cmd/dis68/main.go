@@ -25,13 +25,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	text, err := disassembler.Disassemble(code)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Disassembly error: %v\n", err)
+		os.Exit(1)
+	}
+
 	// If an output file is specified, run the disassembler and write to it.
 	if fn != "" {
-		text, err := disassembler.Disassemble(code)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Disassembly error: %v\n", err)
-			os.Exit(1)
-		}
 		if err := os.WriteFile(fn, []byte(text), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
 			os.Exit(1)
@@ -40,6 +41,5 @@ func main() {
 		return
 	}
 
-	// If no output file is specified, print a hexdump of the input binary to the console.
-	disassembler.Hexdump(code)
+	println(text)
 }
