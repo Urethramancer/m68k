@@ -36,9 +36,9 @@ func (asm *Assembler) assembleStatus(mn Mnemonic, operands []Operand) ([]uint16,
 		case strings.EqualFold(op1.Raw, "sr"):
 			return asm.assembleMoveFromSr(op2)
 
+		// MOVE CCR, <ea>
 		case strings.EqualFold(op1.Raw, "ccr"):
-			// Assembles identically to MOVE from SR, the user just needs to mask the bits
-			return asm.assembleMoveFromSr(op2)
+			return asm.assembleMoveFromCcr(op2)
 
 		// MOVE <ea>, USP
 		case strings.EqualFold(op2.Raw, "usp"):
@@ -106,6 +106,17 @@ func (asm *Assembler) assembleMoveFromSr(dst Operand) ([]uint16, error) {
 		return nil, err
 	}
 	opword := uint16(cpu.OPMOVEFromSR)
+	opword |= eaBits
+	return append([]uint16{opword}, eaExt...), nil
+}
+
+// MOVE CCR, <ea>
+func (asm *Assembler) assembleMoveFromCcr(dst Operand) ([]uint16, error) {
+	eaBits, eaExt, err := asm.encodeEA(dst, cpu.SizeWord)
+	if err != nil {
+		return nil, err
+	}
+	opword := uint16(cpu.OPMOVEFromCCR)
 	opword |= eaBits
 	return append([]uint16{opword}, eaExt...), nil
 }
