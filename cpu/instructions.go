@@ -101,7 +101,8 @@ const (
 	OPMOVEP       = 0x0008 // MOVEP (base)
 	OPMOVEFromSR  = 0x40C0 // MOVE from SR
 	OPMOVEToSR    = 0x46C0 // MOVE to SR (privileged)
-	OPMOVEToCCR   = 0x44C0 // MOVE to CCR
+	OPMOVEToCCR   = 0x44C0 // MOVE to CCR - technically doesn't exist on MC68000
+	OPMOVEFromCCR = 0x42C0 // MOVE from CCR - technically doesn't exist on MC68000
 	OPMOVEFromUSP = 0x4E68 // MOVE from USP
 	OPMOVEToUSP   = 0x4E60 // MOVE to USP
 
