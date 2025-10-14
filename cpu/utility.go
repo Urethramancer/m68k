@@ -52,3 +52,53 @@ func (c *CPU) setNZ(value uint32, size Size) {
 		c.SR |= SRN
 	}
 }
+
+// setFlagsArith sets the C, V, N, Z, and X flags based on an arithmetic operation.
+// This is one of the most complex parts of CPU emulation.
+func (c *CPU) setFlagsArith(src, dst, result uint32, size Size) {
+	// Clear the flags first
+	c.SR &^= (SRX | SRN | SRZ | SRV | SRC)
+
+	var msbMask uint32
+	var signMask uint32
+
+	switch size {
+	case SizeByte:
+		msbMask = 0x80
+		signMask = 0xFF
+	case SizeWord:
+		msbMask = 0x8000
+		signMask = 0xFFFF
+	case SizeLong:
+		msbMask = 0x80000000
+		signMask = 0xFFFFFFFF
+	}
+
+	// Sign bits of operands and result
+	s := src & msbMask
+	d := dst & msbMask
+	r := result & msbMask
+
+	// Zero flag (Z): Set if the result is zero.
+	if (result & signMask) == 0 {
+		c.SR |= SRZ
+	}
+
+	// Negative flag (N): Set if the most significant bit of the result is set.
+	if r != 0 {
+		c.SR |= SRN
+	}
+
+	// Carry flag (C): Set if a carry was generated from the most significant bit.
+	// This happens if (src AND dst) OR (NOT result AND src) OR (NOT result AND dst) has its MSB set.
+	if (s&d)|(^r&s)|(^r&d) != 0 {
+		c.SR |= SRC
+		c.SR |= SRX // Extend flag is always set with Carry
+	}
+
+	// Overflow flag (V): Set if the sign of the result is incorrect.
+	// This happens if the source and destination signs are the same, but the result sign is different.
+	if (s == d) && (s != r) {
+		c.SR |= SRV
+	}
+}

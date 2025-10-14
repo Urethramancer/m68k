@@ -13,13 +13,16 @@ func main() {
 
 	v := vm.New(1024*1024, 1024) // 1MB RAM, 1k cache
 
-	// Opcodes:
-	// movea.l: 207c <0000 2000> -> move immediate long to a0
-	// move.w:  30bc <beef> -> move immediate word to (a0)
+	// New test program with ADD instruction.
+	// It tests basic addition, overflow, and carry flags.
 	source := `
 	org $1000
-	movea.l #$2000, a0
-	move.w  #$beef, (a0)
+	move.l #10, d0
+	add.l  #5, d0        ; d0 should be 15. Flags: ----
+	move.l #$7FFFFFFF, d1 ; Move max positive long
+	add.l  #1, d1        ; d1 should be $80000000. Flags: V--N-
+	move.l #$FFFFFFFF, d2 ; Move -1
+	add.l  #1, d2        ; d2 should be 0. Flags: --CZ-
 `
 	asm := assembler.New()
 	code, err := asm.Assemble(source, 0x1000)
@@ -33,13 +36,12 @@ func main() {
 
 	log.Println("--- CPU State Before Execution ---")
 	v.DumpRegisters()
-	v.DumpMemory(0x2000, 16)
 
 	// Set the CPU to the running state before execution.
 	v.CPU.Running = true
 
-	// Execute instructions one by one
-	for i := 0; i < 2; i++ {
+	// Execute all instructions in the program.
+	for i := 0; i < 6; i++ {
 		err := v.CPU.Execute()
 		if err != nil {
 			log.Fatalf("CPU execution failed: %s at %08X", err, v.CPU.PC-2)
@@ -49,7 +51,6 @@ func main() {
 
 	log.Println("--- CPU State After Execution ---")
 	v.DumpRegisters()
-	v.DumpMemory(0x2000, 16)
 
 	log.Println("\nExecution finished successfully.")
 }
