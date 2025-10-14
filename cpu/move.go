@@ -47,7 +47,6 @@ func (c *CPU) opMOVE(inst *DecodedInstruction) error {
 		return fmt.Errorf("MOVE failed to get source operand: %w", err)
 	}
 
-	// Corrected the order of arguments in the call to PutOperand.
 	err = c.PutOperand(inst.DstMode, inst.DstReg, inst.Size, value)
 	if err != nil {
 		return fmt.Errorf("MOVE failed to put destination operand: %w", err)
