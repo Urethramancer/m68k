@@ -26,10 +26,7 @@
 				"-ldflags=-w -s",
 				"./cmd/asm68"
 			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
+			"group": "build",
 			"presentation": {
 				"reveal": "never",
 				"panel": "shared",
@@ -155,7 +152,10 @@
 				"Build dis68 (Release)",
 				"Build run68 (Release)"
 			],
-			"group": "build",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
 			"problemMatcher": []
 		}
 	]
