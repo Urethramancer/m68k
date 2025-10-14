@@ -8,7 +8,7 @@ import (
 )
 
 // assembleStack handles LINK and UNLK stack operations.
-func assembleStack(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleStack(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "link":
 		return assembleLink(operands)

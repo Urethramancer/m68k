@@ -8,28 +8,28 @@ import (
 )
 
 // assembleLogical handles AND, OR, EOR, and NOT instructions.
-func assembleLogical(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleLogical(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "and", "andi":
-		return assembleAnd(mn, operands, asm)
+		return asm.assembleAnd(mn, operands)
 	case "or", "ori":
-		return assembleOr(mn, operands, asm)
+		return asm.assembleOr(mn, operands)
 	case "eor", "eori":
-		return assembleEor(mn, operands, asm)
+		return asm.assembleEor(mn, operands)
 	case "not":
-		return assembleNot(mn, operands)
+		return asm.assembleNot(mn, operands)
 	}
 	return nil, fmt.Errorf("unknown logical instruction: %s", mn.Value)
 }
 
 // assembleLogicalImmediate is a helper for ANDI, ORI, and EORI.
-func assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, src, dst Operand) ([]uint16, error) {
+func (asm *Assembler) assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, src, dst Operand) ([]uint16, error) {
 	opword, err := setOpwordSize(baseOpcode, mn.Size, SizeBitsSingleOp)
 	if err != nil {
 		return nil, err
 	}
 
-	eaBits, eaExt, err := encodeEA(dst)
+	eaBits, eaExt, err := asm.encodeEA(dst, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, src, dst Operand) 
 	return words, nil
 }
 
-func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleAnd(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("AND requires 2 operands")
 	}
@@ -53,7 +53,7 @@ func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 
 	// Immediate variant: ANDI #imm, <ea>
 	if src.IsImmediate() {
-		return assembleLogicalImmediate(cpu.OPANDI, mn, src, dst)
+		return asm.assembleLogicalImmediate(cpu.OPANDI, mn, src, dst)
 	}
 
 	// Non-immediate AND Dn,<ea> or <ea>,Dn
@@ -67,12 +67,12 @@ func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	if dst.Mode == cpu.ModeData {
 		// Direction: <ea> -> Dn
 		opword |= (dst.Register << 9)
-		eaBits, eaExt, err = encodeEA(src)
+		eaBits, eaExt, err = asm.encodeEA(src, mn.Size)
 	} else {
 		// Direction: Dn -> <ea>
 		opword |= 0x0100
 		opword |= (src.Register << 9)
-		eaBits, eaExt, err = encodeEA(dst)
+		eaBits, eaExt, err = asm.encodeEA(dst, mn.Size)
 	}
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func assembleAnd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleOr(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("OR requires 2 operands")
 	}
@@ -90,7 +90,7 @@ func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, erro
 
 	// Immediate variant: ORI #imm, <ea>
 	if src.IsImmediate() {
-		return assembleLogicalImmediate(cpu.OPORI, mn, src, dst)
+		return asm.assembleLogicalImmediate(cpu.OPORI, mn, src, dst)
 	}
 
 	// Non-immediate OR Dn,<ea> or <ea>,Dn
@@ -104,12 +104,12 @@ func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, erro
 	if dst.Mode == cpu.ModeData {
 		// Direction: <ea> -> Dn
 		opword |= (dst.Register << 9)
-		eaBits, eaExt, err = encodeEA(src)
+		eaBits, eaExt, err = asm.encodeEA(src, mn.Size)
 	} else {
 		// Direction: Dn -> <ea>
 		opword |= 0x0100
 		opword |= (src.Register << 9)
-		eaBits, eaExt, err = encodeEA(dst)
+		eaBits, eaExt, err = asm.encodeEA(dst, mn.Size)
 	}
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func assembleOr(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, erro
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleEor(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("EOR requires 2 operands")
 	}
@@ -127,7 +127,7 @@ func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 
 	// Immediate variant: EORI #imm, <ea>
 	if src.IsImmediate() {
-		return assembleLogicalImmediate(cpu.OPEORI, mn, src, dst)
+		return asm.assembleLogicalImmediate(cpu.OPEORI, mn, src, dst)
 	}
 
 	// Non-immediate EOR: must be Dn -> <ea>
@@ -153,7 +153,7 @@ func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 
 	opword |= (src.Register << 9)
 
-	eaBits, eaExt, err := encodeEA(dst)
+	eaBits, eaExt, err := asm.encodeEA(dst, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func assembleEor(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-func assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("NOT requires 1 operand")
 	}
@@ -173,7 +173,7 @@ func assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
 		return nil, err
 	}
 
-	eaBits, eaExt, err := encodeEA(dst)
+	eaBits, eaExt, err := asm.encodeEA(dst, mn.Size)
 	if err != nil {
 		return nil, err
 	}

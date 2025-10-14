@@ -9,7 +9,7 @@ import (
 )
 
 // assembleMovem assembles MOVEM instructions.
-func assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("MOVEM requires 2 operands")
 	}
@@ -24,20 +24,20 @@ func assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 
 	// MOVEM <reglist>, <ea> — store
-	if strings.Contains(src.Raw, "/") {
-		return assembleMovemStore(src, dst, sz)
+	if strings.Contains(src.Raw, "/") || strings.Contains(src.Raw, "-") {
+		return asm.assembleMovemStore(src, dst, sz)
 	}
 
 	// MOVEM <ea>, <reglist> — load
-	if strings.Contains(dst.Raw, "/") {
-		return assembleMovemLoad(src, dst, sz)
+	if strings.Contains(dst.Raw, "/") || strings.Contains(dst.Raw, "-") {
+		return asm.assembleMovemLoad(src, dst, sz)
 	}
 
 	return nil, fmt.Errorf("invalid MOVEM syntax: must include register list")
 }
 
 // Store form: MOVEM <reglist>, <ea>
-func assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
+func (asm *Assembler) assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
 	regmask, err := parseMovemList(src.Raw)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error)
 		opword |= 0x0040
 	}
 
-	dstEA, dstExt, err := encodeEA(dst)
+	dstEA, dstExt, err := asm.encodeEA(dst, sz)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error)
 }
 
 // Load form: MOVEM <ea>, <reglist>
-func assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
+func (asm *Assembler) assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
 	regmask, err := parseMovemList(dst.Raw)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) 
 		opword |= 0x0040
 	}
 
-	srcEA, srcExt, err := encodeEA(src)
+	srcEA, srcExt, err := asm.encodeEA(src, sz)
 	if err != nil {
 		return nil, err
 	}

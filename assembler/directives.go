@@ -29,13 +29,13 @@ func (asm *Assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
 			return 0, fmt.Errorf("%s requires at least one value", n.Parts[0])
 		}
 		values := strings.Join(n.Parts[1:], " ")
-		return calculateDcSize(dir, values)
+		return asm.calculateDcSize(dir, values)
 
 	case "ds.b", "ds.w", "ds.l":
 		if len(n.Parts) != 2 {
 			return 0, fmt.Errorf("%s requires a single count argument", n.Parts[0])
 		}
-		count, err := parseConstant(n.Parts[1], asm)
+		count, err := asm.parseConstant(n.Parts[1])
 		if err != nil {
 			return 0, fmt.Errorf("invalid count for %s: %v", n.Parts[0], err)
 		}
@@ -48,8 +48,8 @@ func (asm *Assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
 }
 
 // generateDirectiveCode generates the binary data for assembler directives.
-// Returns 16-bit words (big-endian). .even and .org/.equ return nil (handled by assemble loop).
-func (asm *Assembler) generateDirectiveCode(n *Node) ([]uint16, error) {
+// Returns a byte slice, as directives like DC.B are not always word-aligned.
+func (asm *Assembler) generateDirectiveCode(n *Node) ([]byte, error) {
 	// Normalize directive name once: lowercase, no leading dot.
 	raw := strings.ToLower(n.Parts[0])
 	dir := strings.TrimPrefix(raw, ".")
@@ -68,20 +68,19 @@ func (asm *Assembler) generateDirectiveCode(n *Node) ([]uint16, error) {
 		}
 		values := strings.Join(n.Parts[1:], " ")
 		// pass the normalized directive (e.g. "dc.b") and the assembler for symbols.
-		return assembleDc(dir, values, asm)
+		return asm.assembleDc(dir, values)
 
 	case "ds.b", "ds.w", "ds.l":
 		if len(n.Parts) != 2 {
 			return nil, fmt.Errorf("%s requires a single count argument", n.Parts[0])
 		}
-		count, err := parseConstant(n.Parts[1], asm)
+		count, err := asm.parseConstant(n.Parts[1])
 		if err != nil {
 			return nil, fmt.Errorf("invalid count for %s: %v", n.Parts[0], err)
 		}
 		elementSize := getElementSize(dir)
 		byteSize := uint32(count) * elementSize
-		wordSize := (byteSize + 1) / 2
-		return make([]uint16, wordSize), nil
+		return make([]byte, byteSize), nil
 
 	default:
 		return nil, fmt.Errorf("unknown directive: %s", n.Parts[0])
@@ -89,34 +88,17 @@ func (asm *Assembler) generateDirectiveCode(n *Node) ([]uint16, error) {
 }
 
 // calculateDcSize determines the byte size of a .dc directive's data.
-func calculateDcSize(directive, values string) (uint32, error) {
+func (asm *Assembler) calculateDcSize(directive, values string) (uint32, error) {
 	elementSize := getElementSize(directive)
 	var size uint32
 
-	// string handling for .dc.b
-	if elementSize == 1 && (strings.Contains(values, "\"") || strings.Contains(values, "'")) {
-		inQuote := false
-		var quoteChar rune
-		for _, c := range values {
-			switch c {
-			case '\'', '"':
-				if inQuote && c == quoteChar {
-					inQuote = false
-				} else if !inQuote {
-					inQuote = true
-					quoteChar = c
-				}
-			default:
-				if inQuote {
-					size++
-				}
-			}
-		}
-	} else {
-		for _, p := range strings.Split(values, ",") {
-			if trimmed := strings.TrimSpace(p); trimmed != "" {
-				size += elementSize
-			}
+	tokens := splitDcValues(values)
+	for _, tok := range tokens {
+		if tok.Quoted {
+			size += uint32(len(tok.Value))
+		} else {
+			// It's a numeric value. It contributes `elementSize` bytes.
+			size += elementSize
 		}
 	}
 
@@ -126,7 +108,7 @@ func calculateDcSize(directive, values string) (uint32, error) {
 // directives.go
 
 // assembleDc generates machine data for DC.B/DC.W/DC.L.
-func assembleDc(directive, values string, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleDc(directive, values string) ([]byte, error) {
 	elementSize := int(getElementSize(directive))
 	var bytesBuf []byte
 
@@ -138,7 +120,7 @@ func assembleDc(directive, values string, asm *Assembler) ([]uint16, error) {
 			continue
 		}
 
-		val, err := parseConstant(tok.Value, asm)
+		val, err := asm.parseConstant(tok.Value)
 		if err != nil {
 			return nil, fmt.Errorf("invalid constant '%s': %v", tok.Value, err)
 		}
@@ -155,18 +137,7 @@ func assembleDc(directive, values string, asm *Assembler) ([]uint16, error) {
 		}
 	}
 
-	// Pad to an even number of bytes for word conversion.
-	if len(bytesBuf)%2 != 0 {
-		bytesBuf = append(bytesBuf, 0)
-	}
-
-	// Manually convert the byte buffer to a word buffer WITHOUT endian swapping.
-	var words []uint16
-	for i := 0; i < len(bytesBuf); i += 2 {
-		word := (uint16(bytesBuf[i]) << 8) | uint16(bytesBuf[i+1])
-		words = append(words, word)
-	}
-	return words, nil
+	return bytesBuf, nil
 }
 
 // splitDcValues handles mixed quoted strings and numbers correctly.

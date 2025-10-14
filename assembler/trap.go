@@ -8,10 +8,10 @@ import (
 )
 
 // assembleTrap handles TRAP and TRAPV instructions.
-func assembleTrap(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleTrap(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "trap":
-		return assembleTrapImmediate(operands, asm)
+		return asm.assembleTrapImmediate(operands)
 	case "trapv":
 		return assembleTrapv(operands)
 	default:
@@ -21,7 +21,7 @@ func assembleTrap(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, er
 
 // assembleTrapImmediate assembles TRAP #<vector>
 // Valid vectors are 0–15.
-func assembleTrapImmediate(operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleTrapImmediate(operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("TRAP requires 1 operand (an immediate vector number)")
 	}
@@ -31,7 +31,7 @@ func assembleTrapImmediate(operands []Operand, asm *Assembler) ([]uint16, error)
 		return nil, fmt.Errorf("TRAP vector must be immediate (e.g., TRAP #3)")
 	}
 
-	val, err := parseConstant(src.Raw, asm)
+	val, err := asm.parseConstant(src.Raw)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TRAP vector: %v", err)
 	}

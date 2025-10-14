@@ -63,13 +63,3 @@ func New(memsize, cachesize int) *CPU {
 	}
 	return cpu
 }
-
-// Execute a single instruction.
-func (c *CPU) Execute() error {
-	if !c.Running {
-		return nil
-	}
-
-	// Placeholder
-	return nil
-}

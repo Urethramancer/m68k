@@ -20,6 +20,7 @@ type Assembler struct {
 	labels      map[string]uint32
 	outputPos   uint32
 	baseAddress uint32
+	opSize      int // Current operation size in bytes
 }
 
 // New creates a new Assembler instance.
@@ -62,16 +63,12 @@ func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
 			continue
 		}
 
-		var words []uint16
-		var genErr error
-
-		// The main loop must correctly dispatch based on Node Type.
 		if n.Type == NodeDirective {
-			// Handle directives that affect PC or emit padding.
+			// Handle directives that affect PC, emit padding, or generate raw bytes.
 			dirName := strings.TrimPrefix(strings.ToLower(n.Parts[0]), ".")
 			switch dirName {
 			case "org":
-				addr, _ := parseConstant(n.Parts[1], asm)
+				addr, _ := asm.parseConstant(n.Parts[1])
 				pc = uint32(addr)
 				asm.outputPos = pc - baseAddress
 				continue // ORG emits no code itself
@@ -83,23 +80,30 @@ func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
 				}
 				continue // EVEN emits at most one byte
 			default:
-				// For data-emitting directives like DCB, call the directive generator.
-				words, genErr = asm.generateDirectiveCode(n)
+				// For data-emitting directives, generate bytes directly.
+				bytes, err := asm.generateDirectiveCode(n)
+				if err != nil {
+					return nil, fmt.Errorf("final generation failed for '%v': %w", n.Parts, err)
+				}
+				if len(bytes) > 0 {
+					out = append(out, bytes...)
+					asm.outputPos += uint32(len(bytes))
+					pc += uint32(len(bytes))
+				}
 			}
 		} else {
-			// For instructions, call the instruction generator.
-			words, genErr = asm.generateInstructionCode(n, pc, true)
-		}
+			// For instructions, generate words and convert to bytes.
+			words, err := asm.generateInstructionCode(n, pc, true)
+			if err != nil {
+				return nil, fmt.Errorf("final generation failed for '%v': %w", n.Parts, err)
+			}
 
-		if genErr != nil {
-			return nil, fmt.Errorf("final generation failed for '%v': %w", n.Parts, genErr)
-		}
-
-		if len(words) > 0 {
-			bytes := cpu.WordsToBytes(words)
-			out = append(out, bytes...)
-			asm.outputPos += uint32(len(bytes))
-			pc += uint32(len(bytes))
+			if len(words) > 0 {
+				bytes := cpu.WordsToBytes(words)
+				out = append(out, bytes...)
+				asm.outputPos += uint32(len(bytes))
+				pc += uint32(len(bytes))
+			}
 		}
 	}
 
@@ -127,7 +131,7 @@ func (asm *Assembler) runSizingPass(nodes []*Node) (bool, error) {
 			dirName := strings.TrimPrefix(strings.ToLower(n.Parts[0]), ".")
 			switch dirName {
 			case "org":
-				addr, err := parseConstant(n.Parts[1], asm)
+				addr, err := asm.parseConstant(n.Parts[1])
 				if err != nil {
 					return false, err
 				}
@@ -145,7 +149,7 @@ func (asm *Assembler) runSizingPass(nodes []*Node) (bool, error) {
 		} else { // NodeInstruction
 			// Use getSizeBra for accurate branch sizing.
 			if isBranchMnemonic(n.Mnemonic.Value) {
-				size = getSizeBra(n, asm, pc)
+				size = asm.getSizeBra(n, pc)
 			} else {
 				// For other instructions, generate to find size, assuming worst-case for errors.
 				words, _ := asm.generateInstructionCode(n, pc, false)
@@ -220,44 +224,44 @@ func (asm *Assembler) generateInstructionCode(n *Node, pc uint32, finalPass bool
 		for i := range operands {
 			raw := strings.ToLower(strings.TrimSpace(operands[i].Raw))
 			if raw == "sr" || raw == "ccr" || raw == "usp" {
-				return assembleStatus(n.Mnemonic, operands, asm)
+				return asm.assembleStatus(n.Mnemonic, operands)
 			}
 		}
 	}
 
 	switch n.Mnemonic.Value {
 	case "movem":
-		return assembleMovem(n.Mnemonic, operands)
+		return asm.assembleMovem(n.Mnemonic, operands)
 	case "movep":
-		return assembleMovep(n.Mnemonic, operands, asm)
+		return asm.assembleMovep(n.Mnemonic, operands)
 	case "move", "movea", "moveq":
-		return assembleMove(n.Mnemonic, operands, asm, pc)
+		return asm.assembleMove(n.Mnemonic, operands, pc)
 	case "add", "adda", "sub", "suba", "mulu", "muls", "divu", "divs", "addx", "subx", "addq", "subq", "addi", "subi":
-		return assembleMath(n.Mnemonic, operands, asm)
+		return asm.assembleMath(n.Mnemonic, operands)
 	case "and", "or", "eor", "not", "andi", "ori", "eori":
-		return assembleLogical(n.Mnemonic, operands, asm)
+		return asm.assembleLogical(n.Mnemonic, operands)
 	case "lea", "pea":
-		return assembleAddressMode(n.Mnemonic, operands, asm, pc)
+		return asm.assembleAddressMode(n.Mnemonic, operands, pc)
 	case "link", "unlk":
-		return assembleStack(n.Mnemonic, operands, asm)
+		return asm.assembleStack(n.Mnemonic, operands)
 	case "cmp", "cmpa", "cmpi", "tst", "chk":
-		return assembleCompare(n.Mnemonic, operands, asm)
+		return asm.assembleCompare(n.Mnemonic, operands)
 	case "abcd", "sbcd", "nbcd":
-		return assembleBcd(n.Mnemonic, operands)
+		return asm.assembleBcd(n.Mnemonic, operands)
 	case "clr", "neg", "negx", "swap", "ext", "tas", "exg", "reset", "stop", "nop", "illegal":
-		return assembleMisc(n.Mnemonic, operands)
+		return asm.assembleMisc(n.Mnemonic, operands)
 	case "btst", "bset", "bclr", "bchg", "lsl", "lsr", "asl", "asr", "rol", "ror":
-		return assembleBitwise(n.Mnemonic, operands, asm)
+		return asm.assembleBitwise(n.Mnemonic, operands)
 	case "trap", "trapv":
-		return assembleTrap(n.Mnemonic, operands, asm)
+		return asm.assembleTrap(n.Mnemonic, operands)
 	case "rte", "rtr", "rts", "jmp", "jsr", "bra", "bsr", "bhi", "bls", "bcc", "bcs", "bne", "beq", "bvc", "bvs", "bpl", "bmi", "bge", "blt", "bgt", "ble":
-		return assembleFlow(n.Mnemonic, operands, asm.labels, pc, n.Size)
+		return asm.assembleFlow(n.Mnemonic, operands, asm.labels, pc, n.Size)
 	default:
 		if strings.HasPrefix(n.Mnemonic.Value, "s") {
-			return assembleScc(n.Mnemonic, operands)
+			return asm.assembleScc(n.Mnemonic, operands)
 		}
 		if strings.HasPrefix(n.Mnemonic.Value, "db") {
-			return assembleDbcc(n.Mnemonic, operands, asm.labels, pc)
+			return asm.assembleDbcc(n.Mnemonic, operands, asm.labels, pc)
 		}
 
 		if !finalPass {
@@ -328,7 +332,7 @@ func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 			if len(opFields) > 1 {
 				expr = strings.Join(opFields[1:], " ")
 			}
-			val, err := parseConstant(expr, asm)
+			val, err := asm.parseConstant(expr)
 			if err != nil {
 				return nil, fmt.Errorf("line %d: invalid equ value for %s: %v", i+1, mnemonic, err)
 			}
@@ -360,7 +364,7 @@ func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
 				if s == "" {
 					continue
 				}
-				op, err := parseOperand(s, asm)
+				op, err := asm.parseOperand(s)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: error parsing operand '%s': %w", i+1, s, err)
 				}

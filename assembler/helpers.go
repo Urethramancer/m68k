@@ -44,7 +44,9 @@ func setOpwordSize(opword uint16, size cpu.Size, sizeMap map[cpu.Size]uint16) (u
 	return opword | bits, nil
 }
 
-func encodeEA(op Operand) (uint16, []uint16, error) {
+// encodeEA converts an operand into its 6-bit EA field and any necessary extension words.
+// It now requires the instruction size to correctly handle immediate values.
+func (asm *Assembler) encodeEA(op Operand, size cpu.Size) (uint16, []uint16, error) {
 	var word uint16
 	var exts []uint16
 
@@ -66,15 +68,11 @@ func encodeEA(op Operand) (uint16, []uint16, error) {
 
 	case cpu.ModeAddrDisp: // (d16,An)
 		word = (cpu.ModeAddrDisp << 3) | op.Register
-		if len(op.ExtensionWords) > 0 {
-			exts = append(exts, op.ExtensionWords...)
-		}
+		exts = append(exts, op.ExtensionWords...)
 
 	case cpu.ModeAddrIndex: // (d8,An,Xn)
 		word = (cpu.ModeAddrIndex << 3) | op.Register
-		if len(op.ExtensionWords) > 0 {
-			exts = append(exts, op.ExtensionWords...)
-		}
+		exts = append(exts, op.ExtensionWords...)
 
 	case cpu.ModeOther:
 		switch op.Register {
@@ -88,13 +86,7 @@ func encodeEA(op Operand) (uint16, []uint16, error) {
 
 		case cpu.ModePCRelative: // (d16,PC)
 			word = (cpu.ModeOther << 3) | cpu.ModePCRelative
-			// PC-relative uses exactly one 16-bit displacement. Use label placeholder
-			// if present; if not, safely append 0 so assembler can patch later.
-			if len(op.ExtensionWords) > 0 {
-				exts = append(exts, op.ExtensionWords[0])
-			} else {
-				exts = append(exts, 0)
-			}
+			exts = append(exts, op.ExtensionWords...)
 
 		case cpu.RegPCIndex: // (d8,PC,Xn)
 			word = (cpu.ModeOther << 3) | 3 // 111 011
@@ -102,7 +94,24 @@ func encodeEA(op Operand) (uint16, []uint16, error) {
 
 		case cpu.ModeImmediate: // #<data>
 			word = (cpu.ModeOther << 3) | cpu.ModeImmediate
-			exts = append(exts, op.ExtensionWords...)
+			val, err := asm.parseConstant(op.Raw)
+			if err != nil {
+				return 0, nil, fmt.Errorf("can't parse immediate value '%s': %w", op.Raw, err)
+			}
+
+			switch size {
+			case cpu.SizeByte:
+				// Byte immediates are stored in the low-order byte of a word.
+				exts = append(exts, uint16(val&0xFF))
+			case cpu.SizeWord:
+				exts = append(exts, uint16(val))
+			case cpu.SizeLong:
+				// Long immediates require two extension words.
+				exts = append(exts, uint16(val>>16), uint16(val))
+			default:
+				// Default to word size if not specified.
+				exts = append(exts, uint16(val))
+			}
 
 		default:
 			return 0, nil, fmt.Errorf("invalid ModeOther subtype: %d", op.Register)

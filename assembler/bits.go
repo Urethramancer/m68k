@@ -31,12 +31,12 @@ var BitwiseSize = map[cpu.Size]uint16{
 //
 
 // assembleBitwise handles all shift, rotate, and bit manipulation instructions.
-func assembleBitwise(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleBitwise(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "asl", "asr", "lsl", "lsr", "rol", "ror":
-		return assembleShiftRotate(mn, operands, asm)
+		return asm.assembleShiftRotate(mn, operands)
 	case "btst", "bset", "bclr", "bchg":
-		return assembleBitManipulation(mn, operands, asm)
+		return asm.assembleBitManipulation(mn, operands)
 	default:
 		return nil, fmt.Errorf("unknown bitwise instruction: %s", mn.Value)
 	}
@@ -51,7 +51,7 @@ func assembleBitwise(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16,
 //
 //	Register form: <op> #imm,Dy  or  <op> Dx,Dy
 //	Memory form:   <op> <ea>     (always word-sized)
-func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleShiftRotate(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	opword := uint16(cpu.OPShiftRotateBase)
 	opword |= ShiftRotateType[mn.Value]
 
@@ -64,7 +64,7 @@ func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uin
 		opword |= 0x00C0 // Set memory form bits
 		dst := operands[0]
 
-		eaBits, ext, err := encodeEA(dst)
+		eaBits, ext, err := asm.encodeEA(dst, cpu.SizeWord)
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +85,7 @@ func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uin
 		}
 
 		if src.IsImmediate() {
-			count, _ := parseConstant(src.Raw, asm)
+			count, _ := asm.parseConstant(src.Raw)
 			if count < 1 || count > 8 {
 				return nil, fmt.Errorf("immediate shift/rotate count must be between 1 and 8")
 			}
@@ -109,7 +109,7 @@ func assembleShiftRotate(mn Mnemonic, operands []Operand, asm *Assembler) ([]uin
 //
 
 // assembleBitManipulation handles BTST, BCHG, BCLR, BSET.
-func assembleBitManipulation(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleBitManipulation(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", mn.Value)
 	}
@@ -117,20 +117,49 @@ func assembleBitManipulation(mn Mnemonic, operands []Operand, asm *Assembler) ([
 	src, dst := operands[0], operands[1]
 	mnLower := strings.ToLower(mn.Value)
 
-	// Immediate form
+	// Determine effective size for EA encoding and bit number modulo.
+	// Data registers operate on longs (32 bits), memory on bytes (8 bits).
+	eaSize := cpu.SizeByte
+	bitModulo := uint64(8)
+	if dst.Mode == cpu.ModeData {
+		eaSize = cpu.SizeLong
+		bitModulo = 32
+	}
+
+	// Immediate form: <op> #imm, <ea>
 	if src.IsImmediate() {
-		val, _ := parseConstant(src.Raw, asm)
-		opword := uint16(0x0800) // Immediate form base
-		ext := uint16(val)
-		eaBits, eaExt, err := encodeEA(dst)
+		val, err := asm.parseConstant(src.Raw)
+		if err != nil {
+			return nil, err
+		}
+
+		opword := uint16(0x0800) // Base for immediate bit ops
+		switch mnLower {
+		case "btst":
+			// 0x0800 is correct
+		case "bchg":
+			opword = 0x0840
+		case "bclr":
+			opword = 0x0880
+		case "bset":
+			opword = 0x08C0
+		}
+
+		eaBits, eaExt, err := asm.encodeEA(dst, eaSize)
 		if err != nil {
 			return nil, err
 		}
 		opword |= eaBits
-		return append([]uint16{opword, ext}, eaExt...), nil
+
+		// Immediate bit number is an extension word.
+		bitNum := uint16(uint64(val) % bitModulo)
+		// The bit number is encoded in a single word, with the significant bits in the low byte.
+		ext := []uint16{bitNum & 0x00FF}
+
+		return append(append([]uint16{opword}, ext...), eaExt...), nil
 	}
 
-	// Register form
+	// Register form: <op> Dn, <ea>
 	if src.Mode != cpu.ModeData {
 		return nil, fmt.Errorf("source of %s must be data register or immediate", mn.Value)
 	}
@@ -138,7 +167,7 @@ func assembleBitManipulation(mn Mnemonic, operands []Operand, asm *Assembler) ([
 	opword := uint16(cpu.OPBitManipulationBase)
 	opword |= (src.Register << 9)
 
-	eaBits, eaExt, err := encodeEA(dst)
+	eaBits, eaExt, err := asm.encodeEA(dst, eaSize)
 	if err != nil {
 		return nil, err
 	}

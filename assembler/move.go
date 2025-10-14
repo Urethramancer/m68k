@@ -9,7 +9,7 @@ import (
 )
 
 // assembleMove handles MOVE, MOVEA, and MOVEQ instructions.
-func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([]uint16, error) {
+func (asm *Assembler) assembleMove(mn Mnemonic, operands []Operand, pc uint32) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
@@ -29,8 +29,8 @@ func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([
 	}
 
 	// MOVEQ
-	if CanBeMoveq(mn, src, dst, asm) {
-		val, _ := parseConstant(src.Raw, asm)
+	if asm.CanBeMoveq(mn, src, dst) {
+		val, _ := asm.parseConstant(src.Raw)
 		// MOVEQ only supports .L (explicit .W/.B should be rejected)
 		if mn.Size == cpu.SizeWord || mn.Size == cpu.SizeByte {
 			return nil, fmt.Errorf("MOVEQ only supports .L size")
@@ -53,7 +53,7 @@ func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([
 			return nil, fmt.Errorf("MOVEA only supports .W or .L sizes")
 		}
 
-		srcBits, srcExt, err := encodeEA(src)
+		srcBits, srcExt, err := asm.encodeEA(src, mn.Size)
 		if err != nil {
 			return nil, err
 		}
@@ -76,12 +76,12 @@ func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([
 		return nil, fmt.Errorf("unsupported MOVE size")
 	}
 
-	srcBits, srcExt, err := encodeEA(src)
+	srcBits, srcExt, err := asm.encodeEA(src, mn.Size)
 	if err != nil {
 		return nil, err
 	}
 	// We only need the destination's extension words, not its combined EA bits.
-	_, dstExt, err := encodeEA(dst)
+	_, dstExt, err := asm.encodeEA(dst, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -114,14 +114,14 @@ func assembleMove(mn Mnemonic, operands []Operand, asm *Assembler, pc uint32) ([
 
 // CanBeMoveq checks if the instruction can be encoded as MOVEQ.
 // MOVEQ encodes an immediate signed 8-bit constant (-128..127) into a data register.
-func CanBeMoveq(mn Mnemonic, src Operand, dst Operand, asm *Assembler) bool {
+func (asm *Assembler) CanBeMoveq(mn Mnemonic, src Operand, dst Operand) bool {
 	name := strings.ToLower(mn.Value)
 	if name != "move" && name != "moveq" {
 		return false
 	}
 
 	if dst.Mode == cpu.ModeData && src.IsImmediate() {
-		val, err := parseConstant(src.Raw, asm)
+		val, err := asm.parseConstant(src.Raw)
 		if err != nil {
 			return false
 		}

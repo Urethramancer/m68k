@@ -8,14 +8,14 @@ import (
 )
 
 // assembleCompare handles CMP, CMPA, CMPI, TST, and CHK instructions.
-func assembleCompare(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleCompare(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "cmp", "cmpa", "cmpi":
-		return assembleCmpFamily(mn, operands, asm)
+		return asm.assembleCmpFamily(mn, operands)
 	case "tst":
-		return assembleTst(mn, operands, asm)
+		return asm.assembleTst(mn, operands)
 	case "chk":
-		return assembleChk(operands, asm)
+		return asm.assembleChk(operands)
 	default:
 		return nil, fmt.Errorf("unknown compare instruction: %s", mn.Value)
 	}
@@ -23,7 +23,7 @@ func assembleCompare(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16,
 
 // CMP / CMPA / CMPI
 
-func assembleCmpFamily(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleCmpFamily(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	name := strings.ToLower(mn.Value)
 
 	if len(operands) != 2 {
@@ -33,18 +33,18 @@ func assembleCmpFamily(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint1
 
 	switch name {
 	case "cmp":
-		return assembleCmp(mn, src, dst, asm)
+		return asm.assembleCmp(mn, src, dst)
 	case "cmpa":
-		return assembleCmpa(mn, src, dst, asm)
+		return asm.assembleCmpa(mn, src, dst)
 	case "cmpi":
-		return assembleCmpi(mn, src, dst, asm)
+		return asm.assembleCmpi(mn, src, dst)
 	default:
 		return nil, fmt.Errorf("unhandled compare type: %s", name)
 	}
 }
 
 // CMP: 1011 Dn Sz <ea>
-func assembleCmp(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleCmp(mn Mnemonic, src, dst Operand) ([]uint16, error) {
 	if dst.Mode != cpu.ModeData {
 		return nil, fmt.Errorf("CMP destination must be a data register")
 	}
@@ -57,7 +57,7 @@ func assembleCmp(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, error
 
 	opword |= dst.Register << 9
 
-	eaBits, ext, err := encodeEA(src)
+	eaBits, ext, err := asm.encodeEA(src, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func assembleCmp(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, error
 }
 
 // CMPA: 1011 An 11 Sz <ea>
-func assembleCmpa(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleCmpa(mn Mnemonic, src, dst Operand) ([]uint16, error) {
 	if dst.Mode != cpu.ModeAddr {
 		return nil, fmt.Errorf("CMPA destination must be an address register")
 	}
@@ -80,7 +80,7 @@ func assembleCmpa(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, erro
 
 	opword |= dst.Register << 9
 
-	eaBits, ext, err := encodeEA(src)
+	eaBits, ext, err := asm.encodeEA(src, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func assembleCmpa(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, erro
 }
 
 // CMPI: 0000 1100 Sz <ea>
-func assembleCmpi(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleCmpi(mn Mnemonic, src, dst Operand) ([]uint16, error) {
 	if !src.IsImmediate() {
 		return nil, fmt.Errorf("CMPI source must be immediate")
 	}
@@ -101,7 +101,7 @@ func assembleCmpi(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, erro
 		return nil, err
 	}
 
-	eaBits, eaExt, err := encodeEA(dst)
+	eaBits, eaExt, err := asm.encodeEA(dst, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func assembleCmpi(mn Mnemonic, src, dst Operand, asm *Assembler) ([]uint16, erro
 }
 
 // TST: 0100 1010 Sz <ea>
-func assembleTst(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleTst(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("TST requires 1 operand")
 	}
@@ -132,7 +132,7 @@ func assembleTst(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 		return nil, err
 	}
 
-	eaBits, ext, err := encodeEA(op)
+	eaBits, ext, err := asm.encodeEA(op, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func assembleTst(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, err
 }
 
 // CHK: 0100 1000 <ea>, Dn
-func assembleChk(operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleChk(operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("CHK requires 2 operands (<ea>,Dn)")
 	}
@@ -155,7 +155,7 @@ func assembleChk(operands []Operand, asm *Assembler) ([]uint16, error) {
 	opword := uint16(cpu.OPCHK)
 	opword |= dst.Register << 9
 
-	eaBits, ext, err := encodeEA(src)
+	eaBits, ext, err := asm.encodeEA(src, cpu.SizeWord)
 	if err != nil {
 		return nil, err
 	}

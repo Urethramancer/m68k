@@ -68,7 +68,7 @@ func ParseMnemonic(s string) (Mnemonic, error) {
 
 // parseOperand converts an operand string into a structured Operand.
 // It acts as a dispatcher, trying different logical groups of addressing modes in order.
-func parseOperand(s string, asm *Assembler) (Operand, error) {
+func (asm *Assembler) parseOperand(s string) (Operand, error) {
 	s = strings.TrimSpace(s)
 
 	// Handle special registers first
@@ -78,19 +78,19 @@ func parseOperand(s string, asm *Assembler) (Operand, error) {
 
 	// Try each group of modes in a specific order to avoid ambiguity.
 	// More complex/specific patterns should be tried before more general ones.
-	if op, ok, err := tryParseIndexedModes(s, asm); ok || err != nil {
+	if op, ok, err := asm.tryParseIndexedModes(s); ok || err != nil {
 		return op, err
 	}
-	if op, ok, err := tryParseRegisterModes(s, asm); ok || err != nil {
+	if op, ok, err := asm.tryParseRegisterModes(s); ok || err != nil {
 		return op, err
 	}
-	if op, ok, err := tryParsePCModes(s, asm); ok || err != nil {
+	if op, ok, err := asm.tryParsePCModes(s); ok || err != nil {
 		return op, err
 	}
-	if op, ok, err := tryParseAbsoluteModes(s, asm); ok || err != nil {
+	if op, ok, err := asm.tryParseAbsoluteModes(s); ok || err != nil {
 		return op, err
 	}
-	if op, ok, err := tryParseImmediateMode(s, asm); ok || err != nil {
+	if op, ok, err := asm.tryParseImmediateMode(s); ok || err != nil {
 		return op, err
 	}
 
@@ -115,20 +115,20 @@ func tryParseStatusReg(s string) (Operand, bool, error) {
 }
 
 // tryParseIndexedModes handles (d8,An,Xn) and (d8,PC,Xn).
-func tryParseIndexedModes(s string, asm *Assembler) (Operand, bool, error) {
+func (asm *Assembler) tryParseIndexedModes(s string) (Operand, bool, error) {
 	if m := reAddressIndex.FindStringSubmatch(s); m != nil {
-		op, err := parseAddressIndex(m, asm)
+		op, err := asm.parseAddressIndex(m)
 		return op, true, err
 	}
 	if m := rePCRelIndex.FindStringSubmatch(s); m != nil {
-		op, err := parsePCRelIndex(m, asm)
+		op, err := asm.parsePCRelIndex(m)
 		return op, true, err
 	}
 	return Operand{}, false, nil
 }
 
 // tryParseRegisterModes handles Dn, An, (An), (An)+, -(An), and (d16,An).
-func tryParseRegisterModes(s string, asm *Assembler) (Operand, bool, error) {
+func (asm *Assembler) tryParseRegisterModes(s string) (Operand, bool, error) {
 	op := Operand{Raw: s}
 	if m := reDataRegister.FindStringSubmatch(s); m != nil {
 		reg, _ := strconv.Atoi(m[1])
@@ -161,7 +161,7 @@ func tryParseRegisterModes(s string, asm *Assembler) (Operand, bool, error) {
 		return op, true, nil
 	}
 	if m := reAddressDisp.FindStringSubmatch(s); m != nil {
-		disp, err := parseConstant(m[1], asm)
+		disp, err := asm.parseConstant(m[1])
 		if err != nil {
 			return op, false, err
 		}
@@ -175,13 +175,13 @@ func tryParseRegisterModes(s string, asm *Assembler) (Operand, bool, error) {
 }
 
 // tryParsePCModes handles (label,pc) and label(pc).
-func tryParsePCModes(s string, asm *Assembler) (Operand, bool, error) {
+func (asm *Assembler) tryParsePCModes(s string) (Operand, bool, error) {
 	op := Operand{Raw: s}
 	if m := rePCRelDispParen.FindStringSubmatch(s); m != nil {
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.ModePCRelative
 		inner := m[1]
-		if val, err := parseConstant(inner, asm); err == nil {
+		if val, err := asm.parseConstant(inner); err == nil {
 			op.ExtensionWords = []uint16{uint16(int16(val))}
 		} else {
 			op.Label = strings.ToLower(inner)
@@ -192,7 +192,7 @@ func tryParsePCModes(s string, asm *Assembler) (Operand, bool, error) {
 		op.Mode = cpu.ModeOther
 		op.Register = cpu.ModePCRelative
 		inner := m[1]
-		if val, err := parseConstant(inner, asm); err == nil {
+		if val, err := asm.parseConstant(inner); err == nil {
 			op.ExtensionWords = []uint16{uint16(int16(val))}
 		} else {
 			op.Label = strings.ToLower(inner)
@@ -203,10 +203,10 @@ func tryParsePCModes(s string, asm *Assembler) (Operand, bool, error) {
 }
 
 // tryParseAbsoluteModes handles all absolute addressing forms.
-func tryParseAbsoluteModes(s string, asm *Assembler) (Operand, bool, error) {
+func (asm *Assembler) tryParseAbsoluteModes(s string) (Operand, bool, error) {
 	op := Operand{Raw: s}
 	if m := reAbsoluteParenShort.FindStringSubmatch(s); m != nil {
-		val, err := parseConstant(m[1], asm)
+		val, err := asm.parseConstant(m[1])
 		if err != nil {
 			return op, false, err
 		}
@@ -216,7 +216,7 @@ func tryParseAbsoluteModes(s string, asm *Assembler) (Operand, bool, error) {
 		return op, true, nil
 	}
 	if m := reAbsoluteParenLong.FindStringSubmatch(s); m != nil {
-		val, err := parseConstant(m[1], asm)
+		val, err := asm.parseConstant(m[1])
 		if err != nil {
 			return op, false, err
 		}
@@ -242,7 +242,7 @@ func tryParseAbsoluteModes(s string, asm *Assembler) (Operand, bool, error) {
 		return op, true, nil
 	}
 	if m := reAbsoluteSimple.FindStringSubmatch(s); m != nil {
-		val, err := parseConstant(m[0], asm)
+		val, err := asm.parseConstant(m[0])
 		if err != nil {
 			return op, false, err
 		}
@@ -262,13 +262,13 @@ func tryParseAbsoluteModes(s string, asm *Assembler) (Operand, bool, error) {
 
 // tryParseImmediateMode handles #<data>.
 // tryParseImmediateMode handles #<data>.
-func tryParseImmediateMode(s string, asm *Assembler) (Operand, bool, error) {
+func (asm *Assembler) tryParseImmediateMode(s string) (Operand, bool, error) {
 	if !strings.HasPrefix(s, "#") {
 		return Operand{}, false, nil
 	}
 
 	op := Operand{Raw: s}
-	val, err := parseConstant(s[1:], asm) // Parse the string after the '#'
+	val, err := asm.parseConstant(s[1:]) // Parse the string after the '#'
 	if err != nil {
 		return op, false, err
 	}
@@ -298,14 +298,14 @@ func tryParseBareLabel(s string) (Operand, bool, error) {
 }
 
 // parseAddressIndex handles (d8,An,Xn)
-func parseAddressIndex(m []string, asm *Assembler) (Operand, error) {
+func (asm *Assembler) parseAddressIndex(m []string) (Operand, error) {
 	op := Operand{Raw: m[0], Mode: cpu.ModeAddrIndex}
 	var ext uint16
 
 	var disp int64
 	if m[1] != "" {
 		var err error
-		disp, err = parseConstant(m[1], asm)
+		disp, err = asm.parseConstant(m[1])
 		if err != nil {
 			return op, err
 		}
@@ -331,14 +331,14 @@ func parseAddressIndex(m []string, asm *Assembler) (Operand, error) {
 }
 
 // parsePCRelIndex handles (d8,PC,Xn)
-func parsePCRelIndex(m []string, asm *Assembler) (Operand, error) {
+func (asm *Assembler) parsePCRelIndex(m []string) (Operand, error) {
 	op := Operand{Raw: m[0], Mode: cpu.ModeOther, Register: cpu.RegPCIndex}
 	var ext uint16
 
 	var disp int64
 	if m[1] != "" {
 		var err error
-		disp, err = parseConstant(m[1], asm)
+		disp, err = asm.parseConstant(m[1])
 		if err != nil {
 			return op, err
 		}
@@ -360,7 +360,7 @@ func parsePCRelIndex(m []string, asm *Assembler) (Operand, error) {
 }
 
 // parseConstant converts numeric or symbolic expressions to int64.
-func parseConstant(s string, asm *Assembler) (int64, error) {
+func (asm *Assembler) parseConstant(s string) (int64, error) {
 	s = strings.TrimSpace(strings.TrimPrefix(s, "#"))
 
 	// Character literal ('A')

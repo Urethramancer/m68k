@@ -8,44 +8,44 @@ import (
 )
 
 // isQuickImmediate checks if an operand is an immediate value between 1 and 8.
-func isQuickImmediate(src Operand, asm *Assembler) bool {
+func (asm *Assembler) isQuickImmediate(src Operand) bool {
 	if !src.IsImmediate() {
 		return false
 	}
-	val, err := parseConstant(src.Raw, asm)
+	val, err := asm.parseConstant(src.Raw)
 	return err == nil && val >= 1 && val <= 8
 }
 
 // assembleMath handles all integer arithmetic instructions.
-func assembleMath(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleMath(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "add", "adda", "addq", "addi":
-		return assembleAdd(mn, operands, asm)
+		return asm.assembleAdd(mn, operands)
 	case "sub", "suba", "subq", "subi":
-		return assembleSub(mn, operands, asm)
+		return asm.assembleSub(mn, operands)
 	case "addx", "subx":
-		return assembleAddxSubx(mn, operands)
+		return asm.assembleAddxSubx(mn, operands)
 	case "muls", "mulu":
-		return assembleMul(mn, operands)
+		return asm.assembleMul(mn, operands)
 	case "divs", "divu":
-		return assembleDiv(mn, operands)
+		return asm.assembleDiv(mn, operands)
 	case "neg", "negx":
-		return assembleMisc(mn, operands)
+		return asm.assembleMisc(mn, operands)
 	}
 	return nil, fmt.Errorf("unknown math instruction: %s", mn.Value)
 }
 
 // assembleAdd and assembleSub are now simple wrappers for the merged helper function.
-func assembleAdd(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
-	return assembleAddSub(mn, operands, asm, true)
+func (asm *Assembler) assembleAdd(mn Mnemonic, operands []Operand) ([]uint16, error) {
+	return asm.assembleAddSub(mn, operands, true)
 }
 
-func assembleSub(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
-	return assembleAddSub(mn, operands, asm, false)
+func (asm *Assembler) assembleSub(mn Mnemonic, operands []Operand) ([]uint16, error) {
+	return asm.assembleAddSub(mn, operands, false)
 }
 
 // assembleAddSub is a merged helper for both ADD and SUB variants.
-func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool) ([]uint16, error) {
+func (asm *Assembler) assembleAddSub(mn Mnemonic, operands []Operand, isAdd bool) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
@@ -60,9 +60,9 @@ func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool)
 	}
 
 	// ADDQ/SUBQ optimization
-	if isQuickImmediate(src, asm) {
+	if asm.isQuickImmediate(src) {
 		opword := opq
-		val, _ := parseConstant(src.Raw, asm)
+		val, _ := asm.parseConstant(src.Raw)
 		data := uint16(val)
 		if val == 8 {
 			data = 0
@@ -75,7 +75,7 @@ func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool)
 			return nil, err
 		}
 
-		eaBits, ext, err := encodeEA(dst)
+		eaBits, ext, err := asm.encodeEA(dst, mn.Size)
 		if err != nil {
 			return nil, err
 		}
@@ -92,13 +92,13 @@ func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool)
 			return nil, err
 		}
 
-		eaBits, ext, err := encodeEA(dst)
+		eaBits, ext, err := asm.encodeEA(dst, mn.Size)
 		if err != nil {
 			return nil, err
 		}
 		opword |= eaBits
 
-		val, err := parseConstant(src.Raw, asm)
+		val, err := asm.parseConstant(src.Raw)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +124,7 @@ func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool)
 		}
 		opword |= (dst.Register << 9)
 
-		eaBits, ext, err := encodeEA(src)
+		eaBits, ext, err := asm.encodeEA(src, mn.Size)
 		if err != nil {
 			return nil, err
 		}
@@ -145,11 +145,11 @@ func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool)
 
 	if dst.Mode == cpu.ModeData {
 		opword |= (dst.Register << 9)
-		eaBits, ext, err = encodeEA(src)
+		eaBits, ext, err = asm.encodeEA(src, mn.Size)
 	} else {
 		opword |= 0x0100 // direction bit: Dn to EA
 		opword |= (src.Register << 9)
-		eaBits, ext, err = encodeEA(dst)
+		eaBits, ext, err = asm.encodeEA(dst, mn.Size)
 	}
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func assembleAddSub(mn Mnemonic, operands []Operand, asm *Assembler, isAdd bool)
 	return append([]uint16{opword}, ext...), nil
 }
 
-func assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
@@ -189,7 +189,7 @@ func assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	return []uint16{opword}, nil
 }
 
-func assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("MUL requires 2 operands (<ea>, Dn)")
 	}
@@ -210,7 +210,7 @@ func assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 	opword |= (dst.Register << 9)
 
-	eaBits, ext, err := encodeEA(src)
+	eaBits, ext, err := asm.encodeEA(src, mn.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	return append([]uint16{opword}, ext...), nil
 }
 
-func assembleDiv(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleDiv(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("DIV requires 2 operands (<ea>, Dn)")
 	}
@@ -239,7 +239,7 @@ func assembleDiv(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	}
 	opword |= (dst.Register << 9)
 
-	eaBits, ext, err := encodeEA(src)
+	eaBits, ext, err := asm.encodeEA(src, mn.Size)
 	if err != nil {
 		return nil, err
 	}

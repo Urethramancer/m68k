@@ -8,10 +8,10 @@ import (
 )
 
 // assembleFlow dispatches to the correct flow-control assembly function.
-func assembleFlow(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32, size uint32) ([]uint16, error) {
+func (asm *Assembler) assembleFlow(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32, size uint32) ([]uint16, error) {
 	switch mn.Value {
 	case "jmp", "jsr":
-		return assembleJmpJsr(mn, operands, labels)
+		return asm.assembleJmpJsr(mn, operands, labels)
 	case "rts":
 		return assembleRts()
 	case "rtr":
@@ -25,7 +25,7 @@ func assembleFlow(mn Mnemonic, operands []Operand, labels map[string]uint32, pc 
 }
 
 // getSizeBra calculates the optimal size for a branch instruction during the sizing pass.
-func getSizeBra(n *Node, asm *Assembler, pc uint32) uint32 {
+func (asm *Assembler) getSizeBra(n *Node, pc uint32) uint32 {
 	// If size is explicitly specified (e.g., bra.s), respect it.
 	if n.Mnemonic.Size == cpu.SizeByte {
 		return 2
@@ -55,7 +55,7 @@ func getSizeBra(n *Node, asm *Assembler, pc uint32) uint32 {
 
 // JMP / JSR
 
-func assembleJmpJsr(mn Mnemonic, operands []Operand, labels map[string]uint32) ([]uint16, error) {
+func (asm *Assembler) assembleJmpJsr(mn Mnemonic, operands []Operand, labels map[string]uint32) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("%s requires 1 operand", strings.ToUpper(mn.Value))
 	}
@@ -75,7 +75,7 @@ func assembleJmpJsr(mn Mnemonic, operands []Operand, labels map[string]uint32) (
 	}
 
 	// Otherwise encode EA
-	eaBits, eaExt, err := encodeEA(src)
+	eaBits, eaExt, err := asm.encodeEA(src, cpu.SizeLong)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func assembleBra(mn Mnemonic, operands []Operand, labels map[string]uint32, pc u
 
 // Scc (Set Conditional)
 
-func assembleScc(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleScc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("Scc requires 1 operand")
 	}
@@ -144,7 +144,7 @@ func assembleScc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 
 // DBcc (Decrement & Branch Conditional)
 
-func assembleDbcc(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32) ([]uint16, error) {
+func (asm *Assembler) assembleDbcc(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("DBcc requires 2 operands (Dn, label)")
 	}

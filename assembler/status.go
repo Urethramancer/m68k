@@ -8,7 +8,7 @@ import (
 )
 
 // assembleStatus handles instructions involving SR, CCR, and USP.
-func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, error) {
+func (asm *Assembler) assembleStatus(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) == 0 {
 		return nil, fmt.Errorf("%s requires at least one operand", strings.ToUpper(mn.Value))
 	}
@@ -26,19 +26,19 @@ func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, 
 		switch {
 		// MOVE <ea>, SR
 		case strings.EqualFold(op2.Raw, "sr"):
-			return assembleMoveToSr(op1)
+			return asm.assembleMoveToSr(op1)
 
 		// MOVE <ea>, CCR
 		case strings.EqualFold(op2.Raw, "ccr"):
-			return assembleMoveToCcr(op1)
+			return asm.assembleMoveToCcr(op1)
 
 		// MOVE SR, <ea>
 		case strings.EqualFold(op1.Raw, "sr"):
-			return assembleMoveFromSr(op2)
+			return asm.assembleMoveFromSr(op2)
 
 		case strings.EqualFold(op1.Raw, "ccr"):
 			// Assembles identically to MOVE from SR, the user just needs to mask the bits
-			return assembleMoveFromSr(op2)
+			return asm.assembleMoveFromSr(op2)
 
 		// MOVE <ea>, USP
 		case strings.EqualFold(op2.Raw, "usp"):
@@ -78,8 +78,8 @@ func assembleStatus(mn Mnemonic, operands []Operand, asm *Assembler) ([]uint16, 
 }
 
 // MOVE <ea>, SR
-func assembleMoveToSr(src Operand) ([]uint16, error) {
-	eaBits, eaExt, err := encodeEA(src)
+func (asm *Assembler) assembleMoveToSr(src Operand) ([]uint16, error) {
+	eaBits, eaExt, err := asm.encodeEA(src, cpu.SizeWord)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +89,8 @@ func assembleMoveToSr(src Operand) ([]uint16, error) {
 }
 
 // MOVE <ea>, CCR
-func assembleMoveToCcr(src Operand) ([]uint16, error) {
-	eaBits, eaExt, err := encodeEA(src)
+func (asm *Assembler) assembleMoveToCcr(src Operand) ([]uint16, error) {
+	eaBits, eaExt, err := asm.encodeEA(src, cpu.SizeWord)
 	if err != nil {
 		return nil, err
 	}
@@ -100,8 +100,8 @@ func assembleMoveToCcr(src Operand) ([]uint16, error) {
 }
 
 // MOVE SR, <ea>
-func assembleMoveFromSr(dst Operand) ([]uint16, error) {
-	eaBits, eaExt, err := encodeEA(dst)
+func (asm *Assembler) assembleMoveFromSr(dst Operand) ([]uint16, error) {
+	eaBits, eaExt, err := asm.encodeEA(dst, cpu.SizeWord)
 	if err != nil {
 		return nil, err
 	}

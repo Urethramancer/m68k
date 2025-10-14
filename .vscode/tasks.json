@@ -28,7 +28,7 @@
 			],
 			"group": {
 				"kind": "build",
-				"isDefault": false
+				"isDefault": true
 			},
 			"presentation": {
 				"reveal": "never",
@@ -155,10 +155,7 @@
 				"Build dis68 (Release)",
 				"Build run68 (Release)"
 			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
+			"group": "build",
 			"problemMatcher": []
 		}
 	]

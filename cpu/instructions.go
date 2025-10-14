@@ -16,6 +16,21 @@ const (
 	SizeShort
 )
 
+// Bytes returns the size in bytes.
+func (s Size) Bytes() int {
+	switch s {
+	case SizeByte:
+		return 1
+	case SizeWord:
+		return 2
+	case SizeLong:
+		return 4
+	case SizeShort: // Used for branch displacement, which is a word.
+		return 2
+	}
+	return 0
+}
+
 // Opcodes for various instructions.
 const (
 	// Logical and Bit Manipulation Instructions

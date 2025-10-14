@@ -7,23 +7,23 @@ import (
 	"github.com/Urethramancer/m68k/cpu"
 )
 
-func assembleMisc(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleMisc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "exg":
-		return assembleExg(operands)
+		return asm.assembleExg(operands)
 	case "stop":
-		return assembleStop(operands)
+		return asm.assembleStop(operands)
 	case "clr", "neg", "negx", "swap", "ext", "tas":
-		return assembleMiscOneOp(mn, operands)
+		return asm.assembleMiscOneOp(mn, operands)
 	case "reset", "nop", "illegal":
-		return assembleMiscNoOp(mn, operands)
+		return asm.assembleMiscNoOp(mn, operands)
 	default:
 		return nil, fmt.Errorf("unknown misc instruction: %s", mn.Value)
 	}
 }
 
 // STOP
-func assembleStop(operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleStop(operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("STOP requires one immediate operand")
 	}
@@ -38,7 +38,7 @@ func assembleStop(operands []Operand) ([]uint16, error) {
 }
 
 // RESET / NOP / ILLEGAL
-func assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 0 {
 		return nil, fmt.Errorf("%s requires no operands", strings.ToUpper(mn.Value))
 	}
@@ -55,7 +55,7 @@ func assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 }
 
 // EXG
-func assembleExg(operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleExg(operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("EXG requires 2 operands")
 	}
@@ -80,7 +80,7 @@ func assembleExg(operands []Operand) ([]uint16, error) {
 }
 
 // One-operand instructions
-func assembleMiscOneOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *Assembler) assembleMiscOneOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("%s requires 1 operand", strings.ToUpper(mn.Value))
 	}
@@ -124,7 +124,13 @@ func assembleMiscOneOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 		return nil, err
 	}
 
-	eaBits, extWords, err := encodeEA(dst)
+	// For TAS, the operation size is always byte. For others, use the mnemonic's size.
+	eaSize := mn.Size
+	if strings.ToLower(mn.Value) == "tas" {
+		eaSize = cpu.SizeByte
+	}
+
+	eaBits, extWords, err := asm.encodeEA(dst, eaSize)
 	if err != nil {
 		return nil, fmt.Errorf("invalid addressing mode for %s: %v", mn.Value, err)
 	}
