@@ -10,8 +10,9 @@ Both tools are designed to be lightweight, portable, and easily extendable. They
 
 ```
 cmd/
-├── asm68/   \# Assembler CLI tool
-└── dis68/   \# Disassembler CLI tool
+├── asm68/	# Assembler CLI tool
+└── dis68/	# Disassembler CLI tool
+└── run68/	# Code runner CLI tool
 ```
 
 ## Assembler (asm68)
