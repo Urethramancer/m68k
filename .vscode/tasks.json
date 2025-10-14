@@ -105,11 +105,55 @@
 			]
 		},
 		{
+			"label": "Build run68 (Release)",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"build",
+				"-o",
+				"bin/run68",
+				"-ldflags=-w -s",
+				"./cmd/run68"
+			],
+			"group": "build",
+			"presentation": {
+				"reveal": "never",
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"problemMatcher": [
+				"$go"
+			]
+		},
+		{
+			"label": "Build run68 (Debug)",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"build",
+				"-o",
+				"bin/run68",
+				"./cmd/run68"
+			],
+			"group": "build",
+			"presentation": {
+				"reveal": "never",
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"problemMatcher": [
+				"$go"
+			]
+		},
+		{
 			"label": "Build all (Release)",
 			"type": "shell",
 			"dependsOn": [
 				"Build asm68 (Release)",
-				"Build dis68 (Release)"
+				"Build dis68 (Release)",
+				"Build run68 (Release)"
 			],
 			"group": {
 				"kind": "build",
