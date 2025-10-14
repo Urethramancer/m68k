@@ -110,6 +110,7 @@ To print disassembly to the terminal:
 
 ## **Project Layout**
 
+```
 .
 ├── assembler/       \# Core assembler logic (mnemonic parsing, operand encoding)
 ├── cpu/             \# CPU constants, opcodes, addressing modes, endianness helpers
@@ -118,6 +119,7 @@ To print disassembly to the terminal:
 │   ├── asm68/       \# Assembler CLI
 │   └── dis68/       \# Disassembler CLI
 └── README.md
+````
 
 ## Possible improvements
 
