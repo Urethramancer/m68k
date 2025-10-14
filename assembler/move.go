@@ -15,19 +15,6 @@ func (asm *Assembler) assembleMove(mn Mnemonic, operands []Operand, pc uint32) (
 	}
 	src, dst := operands[0], operands[1]
 
-	// If a raw operand was a bare label already resolved to an address,
-	// convert it to an absolute long EA so encodeEA will emit proper extension words.
-	if target, ok := asm.labels[strings.ToLower(src.Raw)]; ok && !src.IsImmediate() {
-		src.Mode = cpu.ModeOther
-		src.Register = cpu.ModeAbsLong
-		src.ExtensionWords = []uint16{uint16(target >> 16), uint16(target)}
-	}
-	if target, ok := asm.labels[strings.ToLower(dst.Raw)]; ok && !dst.IsImmediate() {
-		dst.Mode = cpu.ModeOther
-		dst.Register = cpu.ModeAbsLong
-		dst.ExtensionWords = []uint16{uint16(target >> 16), uint16(target)}
-	}
-
 	// MOVEQ
 	if asm.CanBeMoveq(mn, src, dst) {
 		val, _ := asm.parseConstant(src.Raw)
