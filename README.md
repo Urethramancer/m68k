@@ -8,9 +8,11 @@ The assembler converts Motorola 68000 assembly source code into machine code, wh
 
 Both tools are designed to be lightweight, portable, and easily extendable. They follow Go conventions, with separate command-line tools under the cmd/ directory.
 
+```
 cmd/
 ├── asm68/   \# Assembler CLI tool
 └── dis68/   \# Disassembler CLI tool
+```
 
 ## Assembler (asm68)
 
