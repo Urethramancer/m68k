@@ -1,4 +1,4 @@
-# m68k Assembler and Disassembler
+# m68k assembler, disassembler and virtual machine
 
 This repository contains a Motorola 68000 assembler (asm68) and disassembler (dis68), both written in Go. They're implemented as the packages **assembler** and **disassembler**, with a common **cpu** package defining instruction opcodes, modes and other bits.
 
