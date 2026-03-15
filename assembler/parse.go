@@ -309,6 +309,10 @@ func (asm *Assembler) parseAddressIndex(m []string) (Operand, error) {
 		if err != nil {
 			return op, err
 		}
+		// Validate signed 8-bit displacement range
+		if disp < -128 || disp > 127 {
+			return op, fmt.Errorf("index displacement out of 8-bit range: %d", disp)
+		}
 	}
 	// signed 8-bit displacement
 	ext |= uint16(uint8(int8(disp)))
@@ -342,6 +346,10 @@ func (asm *Assembler) parsePCRelIndex(m []string) (Operand, error) {
 		if err != nil {
 			return op, err
 		}
+		// Validate signed 8-bit displacement range
+		if disp < -128 || disp > 127 {
+			return op, fmt.Errorf("pc-index displacement out of 8-bit range: %d", disp)
+		}
 	}
 	ext |= uint16(uint8(int8(disp)))
 
@@ -363,9 +371,56 @@ func (asm *Assembler) parsePCRelIndex(m []string) (Operand, error) {
 func (asm *Assembler) parseConstant(s string) (int64, error) {
 	s = strings.TrimSpace(strings.TrimPrefix(s, "#"))
 
-	// Character literal ('A')
+	// Character literal ('A') with improved escape handling
 	if len(s) >= 3 && s[0] == '\'' && s[len(s)-1] == '\'' {
-		return int64(s[1]), nil
+		content := s[1 : len(s)-1]
+		if content == "" {
+			return 0, fmt.Errorf("empty character literal")
+		}
+		// If it starts with a backslash, handle escapes.
+		if content[0] == '\\' {
+			// Common single-character escapes
+			switch content {
+			case "\\n":
+				return int64('\n'), nil
+			case "\\r":
+				return int64('\r'), nil
+			case "\\t":
+				return int64('\t'), nil
+			case "\\'":
+				return int64('\''), nil
+			case "\\\"":
+				return int64('"'), nil
+			case "\\\\":
+				return int64('\\'), nil
+			}
+
+			// Hex escape \xHH
+			if len(content) >= 3 && (content[1] == 'x' || content[1] == 'X') {
+				if v, err := strconv.ParseInt(content[2:], 16, 64); err == nil {
+					return int64(v), nil
+				}
+			}
+
+			// Octal escape \NNN (up to 3 octal digits)
+			if len(content) >= 2 {
+				octal := content[1:]
+				if len(octal) > 3 {
+					octal = octal[:3]
+				}
+				if v, err := strconv.ParseInt(octal, 8, 64); err == nil {
+					return int64(v), nil
+				}
+			}
+
+			// Fallback to next char if unknown
+			if len(content) >= 2 {
+				return int64(content[1]), nil
+			}
+		}
+
+		// Default: return first byte of content (ASCII assumed)
+		return int64(content[0]), nil
 	}
 
 	// Symbol lookup

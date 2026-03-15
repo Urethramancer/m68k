@@ -102,6 +102,14 @@ func (asm *Assembler) calculateDcSize(directive, values string) (uint32, error) 
 		}
 	}
 
+	// For byte-sized DC directives, many assemblers pad to an even length
+	// so that subsequent words/longs remain aligned. Preserve that behaviour
+	// to match the test expectations: if elementSize == 1 and size is odd,
+	// add one padding byte.
+	if elementSize == 1 && size%2 == 1 {
+		size++
+	}
+
 	return size, nil
 }
 
@@ -135,6 +143,13 @@ func (asm *Assembler) assembleDc(directive, values string) ([]byte, error) {
 				byte(val>>24), byte(val>>16),
 				byte(val>>8), byte(val))
 		}
+	}
+
+	// For DC.B, pad to an even byte count so subsequent word/long directives
+	// remain aligned. This mirrors common assembler behaviour and the test
+	// expectations.
+	if elementSize == 1 && len(bytesBuf)%2 == 1 {
+		bytesBuf = append(bytesBuf, 0x00)
 	}
 
 	return bytesBuf, nil

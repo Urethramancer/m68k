@@ -45,7 +45,10 @@ func setOpwordSize(opword uint16, size cpu.Size, sizeMap map[cpu.Size]uint16) (u
 }
 
 // encodeEA converts an operand into its 6-bit EA field and any necessary extension words.
-// It now requires the instruction size to correctly handle immediate values.
+// It requires the instruction size to correctly handle immediate values.
+// Note: parseConstant accepts single-quoted character literals (with simple escapes) and numeric
+// formats like $hex, 0xhex, %binary. Passing op.Raw may include a leading '#'; parseConstant will
+// strip it as needed.
 func (asm *Assembler) encodeEA(op Operand, size cpu.Size) (uint16, []uint16, error) {
 	var word uint16
 	var exts []uint16
@@ -89,7 +92,9 @@ func (asm *Assembler) encodeEA(op Operand, size cpu.Size) (uint16, []uint16, err
 			exts = append(exts, op.ExtensionWords...)
 
 		case cpu.RegPCIndex: // (d8,PC,Xn)
-			word = (cpu.ModeOther << 3) | 3 // 111 011
+			// PC-index EA encoding uses mode=7 (ModeOther) and reg=3 -> 0b111_011
+			const eaPCIndex uint16 = (cpu.ModeOther << 3) | 3
+			word = eaPCIndex
 			exts = append(exts, op.ExtensionWords...)
 
 		case cpu.ModeImmediate: // #<data>

@@ -53,7 +53,8 @@ func (asm *Assembler) assembleBitwise(mn Mnemonic, operands []Operand) ([]uint16
 //	Memory form:   <op> <ea>     (always word-sized)
 func (asm *Assembler) assembleShiftRotate(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	opword := uint16(cpu.OPShiftRotateBase)
-	opword |= ShiftRotateType[mn.Value]
+	mnLower := strings.ToLower(mn.Value)
+	opword |= ShiftRotateType[mnLower]
 
 	switch len(operands) {
 	// Memory form
