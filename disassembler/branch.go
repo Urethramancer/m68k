@@ -9,16 +9,22 @@ import (
 
 // isBranchMnemonic checks if an instruction is a form of branch.
 func isBranchMnemonic(val string) bool {
-	switch val {
+	// Accept forms with explicit size suffixes (e.g., "bra.s", "beq.w").
+	base := val
+	if idx := strings.IndexByte(val, '.'); idx != -1 {
+		base = val[:idx]
+	}
+	switch base {
 	case "bra", "bsr", "bhi", "bls", "bcc", "bcs", "bne", "beq", "bvc", "bvs", "bpl", "bmi", "bge", "blt", "bgt", "ble":
 		return true
 	default:
-		return strings.HasPrefix(val, "db")
+		return strings.HasPrefix(base, "db")
 	}
 }
 
 // decodeBranch decodes all branch and conditional branch opcodes.
 func decodeBranch(op uint16, code []byte, pc int) (string, string, int) {
+
 	cond := uint16((op >> 8) & 0xF)
 	var name string
 	switch cond {
@@ -31,7 +37,8 @@ func decodeBranch(op uint16, code []byte, pc int) (string, string, int) {
 	}
 
 	disp8 := uint8(op & 0xFF)
-	// short (8-bit) displacement
+	// short (8-bit) displacement — omit size suffix for compactness (tests
+	// and canonical output expect the base mnemonic without '.s').
 	if disp8 != 0x00 && disp8 != 0xFF {
 		val := int8(disp8)
 		return name, formatDisp(int64(val)), 0
@@ -40,18 +47,18 @@ func decodeBranch(op uint16, code []byte, pc int) (string, string, int) {
 	// word displacement
 	if disp8 == 0x00 {
 		if pc+2 > len(code) {
-			return name, "?", 0
+			return name + ".w", "?", 0
 		}
 		w := int16(binary.BigEndian.Uint16(code[pc:]))
-		return name, formatDisp(int64(w)), 2
+		return name + ".w", formatDisp(int64(w)), 2
 	}
 
 	// long displacement (0xFF)
 	if pc+4 > len(code) {
-		return name, "?", 0
+		return name + ".l", "?", 0
 	}
 	l := int32(binary.BigEndian.Uint32(code[pc:]))
-	return name, formatDisp(int64(l)), 4
+	return name + ".l", formatDisp(int64(l)), 4
 }
 
 func condName(cond uint16) string {

@@ -94,6 +94,14 @@ func (asm *Assembler) parseOperand(s string) (Operand, error) {
 		return op, err
 	}
 
+	// Finally, if nothing else matches, check for MOVEM-style register lists
+	// These look like "d0-d3/a0/a6" and are not valid general operands but are
+	// accepted as raw operands for MOVEM parsing later.
+	if strings.Contains(s, "/") || strings.Contains(s, "-") {
+		op := Operand{Raw: s, Mode: cpu.ModeOther}
+		return op, nil
+	}
+
 	// Finally, if nothing else matches, check if it's a bare label.
 	if op, ok, err := tryParseBareLabel(s); ok || err != nil {
 		return op, err

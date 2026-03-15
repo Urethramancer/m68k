@@ -96,13 +96,13 @@ func DecodeEA(ea uint16, pc int, code []byte, size uint16) (string, int) {
 		return fmt.Sprintf("-(a%d)", reg), 0
 	case 5:
 		if pc+2 > len(code) {
-			return fmt.Sprintf("(?,a%d)", reg), 0
+			return fmt.Sprintf("?,a%d", reg), 0
 		}
 		disp := int16(binary.BigEndian.Uint16(code[pc:]))
-		return fmt.Sprintf("(%s,a%d)", formatDisp16(disp), reg), 2
+		return fmt.Sprintf("%s(a%d)", formatDisp16(disp), reg), 2
 	case 6:
 		if pc+2 > len(code) {
-			return fmt.Sprintf("(?,a%d,x?)", reg), 0
+			return fmt.Sprintf("?,a%d,x?", reg), 0
 		}
 		ext := binary.BigEndian.Uint16(code[pc:])
 		disp := int8(ext & 0xFF)
@@ -115,7 +115,7 @@ func DecodeEA(ea uint16, pc int, code []byte, size uint16) (string, int) {
 		if (ext & 0x8000) != 0 {
 			regType = "a"
 		}
-		return fmt.Sprintf("(%s,a%d,%s%d.%s)", formatDisp8(disp), reg, regType, idx, sizeChar), 2
+		return fmt.Sprintf("%s(a%d,%s%d.%s)", formatDisp8(disp), reg, regType, idx, sizeChar), 2
 	case 7:
 		switch reg {
 		case 0:
@@ -138,7 +138,7 @@ func DecodeEA(ea uint16, pc int, code []byte, size uint16) (string, int) {
 			return fmt.Sprintf("(%s,pc)", formatDisp16(disp)), 2
 		case 3:
 			if pc+2 > len(code) {
-				return "(?,pc,xn)", 0
+				return "?,pc,xn", 0
 			}
 			ext := binary.BigEndian.Uint16(code[pc:])
 			disp := int8(ext & 0xFF)
@@ -151,7 +151,7 @@ func DecodeEA(ea uint16, pc int, code []byte, size uint16) (string, int) {
 			if (ext & 0x8000) != 0 {
 				regType = "a"
 			}
-			return fmt.Sprintf("(%s,pc,%s%d.%s)", formatDisp8(disp), regType, idx, sizeChar), 2
+			return fmt.Sprintf("%s(pc,%s%d.%s)", formatDisp8(disp), regType, idx, sizeChar), 2
 		case 4:
 			return readImmediateBySize(code, pc, size)
 		}
@@ -194,17 +194,14 @@ func TestableDecode(op uint16, pc int, code []byte) (string, string, int) {
 }
 
 func formatDisp8(v int8) string {
-	if v >= -9 && v <= 9 {
-		return fmt.Sprintf("%d", v)
-	}
-	return fmt.Sprintf("$%x", uint8(v))
+	// Always use signed decimal for displacements; assembler.parse handles
+	// decimal forms and tests expect decimal in many places (movep, etc.).
+	return fmt.Sprintf("%d", v)
 }
 
 func formatDisp16(v int16) string {
-	if v >= -9 && v <= 9 {
-		return fmt.Sprintf("%d", v)
-	}
-	return fmt.Sprintf("$%x", uint16(v))
+	// Prefer signed decimal for consistency with test expectations.
+	return fmt.Sprintf("%d", v)
 }
 
 func formatDisp(v int64) string {
@@ -258,4 +255,44 @@ func Hexdump(data []byte) {
 		}
 		fmt.Println("|")
 	}
+}
+
+// normalizeMovepForAssembly rewrites movep operand text into a form the
+// assembler's parser accepts. The disassembler uses canonical forms for
+// TestableDecode, but the final rendering needs slight tweaks for round-trip
+// assembly.
+func normalizeMovepForAssembly(s string) string {
+	// Handle two common shapes:
+	// 1) "(N,aX),dY" -> "N(aX),dY"
+	// 2) "dY,(N,aX)" -> "dY,N(aX)"
+	if len(s) == 0 {
+		return s
+	}
+	// Replace any occurrence of "(N,aX)" with "N(aX)" where N is digits or -digits.
+	// This is intentionally simple — input is controlled by decode routines.
+	out := s
+	out = strings.ReplaceAll(out, "( ", "(")
+	// Find patterns like "(123,a3)" or "(-2,a2)".
+	for i := 0; i < len(out); i++ {
+		if out[i] == '(' {
+			// find closing ')'
+			j := i + 1
+			for j < len(out) && out[j] != ')' {
+				j++
+			}
+			if j < len(out) && out[j] == ')' {
+				token := out[i+1 : j]
+				// token like "123,a3" or "-2,a2"
+				parts := strings.Split(token, ",")
+				if len(parts) == 2 && strings.HasPrefix(strings.TrimSpace(parts[1]), "a") {
+					// rewrite
+					repl := parts[0] + "(" + strings.TrimSpace(parts[1]) + ")"
+					out = out[:i] + repl + out[j+1:]
+					// restart scan
+					i = -1
+				}
+			}
+		}
+	}
+	return out
 }

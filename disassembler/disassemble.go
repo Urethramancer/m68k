@@ -52,7 +52,7 @@ func Disassemble(code []byte) (string, error) {
 			Size:     uint32(2 + used),
 		}
 		instructions[addr] = inst
-		pc += 2
+		pc += int(2 + used)
 	}
 
 	// --- STAGE 2: Control Flow Analysis ---
@@ -60,16 +60,39 @@ func Disassemble(code []byte) (string, error) {
 	q := newQueue()
 	q.push(0)
 
+	// Perform control-flow analysis to find label targets (best-effort).
 	for {
 		addr, ok := q.pop()
 		if !ok {
 			break
 		}
 
+		// Heuristic: if this address points into a long printable ASCII run, it's
+		// likely data. Skip marking it as code so the renderer will emit it as
+		// data instead of decoding instructions out of text.
+		if int(addr) < len(code) {
+			printables := 0
+			for i := int(addr); i < len(code) && i < int(addr)+32; i++ {
+				b := code[i]
+				if b >= 32 && b <= 126 {
+					printables++
+				} else {
+					if printables >= 6 {
+						break
+					}
+					printables = 0
+				}
+			}
+			if printables >= 6 {
+				continue
+			}
+		}
+
 		inst, exists := instructions[addr]
-		if !exists || inst.IsCode {
+		if !exists {
 			continue
 		}
+		// Mark this instruction as reachable code.
 		inst.IsCode = true
 
 		if !isTerminal(inst.Mnemonic) {
@@ -106,31 +129,66 @@ func Disassemble(code []byte) (string, error) {
 	stringCounter := 1
 	pc := uint32(0)
 	totalLen := uint32(len(code))
+	printedLabels := make(map[string]bool)
 
 	for pc < totalLen {
-		// If the current address is not marked as code, find the end of the
-		// data block and pass it to the data analyzer.
-		if inst, isCode := instructions[pc]; !isCode || !inst.IsCode {
+		// If there's a label at this address, print it even if it's data.
+		if labelType, exists := labelTargets[pc]; exists {
+			ln := labelName(pc, labelType)
+			if !printedLabels[ln] {
+				fmt.Fprintf(&out, "%s:\n", ln)
+				printedLabels[ln] = true
+			}
+		}
+
+		// If the current address does not have a decoded instruction, or the
+		// instruction isn't marked as reachable code, treat it as data.
+		inst, exists := instructions[pc]
+		if !exists || (exists && !inst.IsCode) {
 			dataStart := pc
 			dataEnd := dataStart
 			for dataEnd < totalLen {
-				if inst, isCode := instructions[dataEnd]; isCode && inst.IsCode {
+				if _, exists := instructions[dataEnd]; exists {
 					break
 				}
 				dataEnd++
 			}
-			out.WriteString(analyzeAndFormatData(code[dataStart:dataEnd], dataStart, &stringCounter))
-			pc = dataEnd
+			// If any labelTargets fall inside this data range, split the data region
+			// so labels can be emitted at their exact addresses. This preserves
+			// layout while guaranteeing forward/backward label definitions exist.
+			for {
+				// Find the nearest label target within [dataStart+1, dataEnd)
+				var splitAt uint32 = 0
+				for addr := range labelTargets {
+					if addr > dataStart && addr < dataEnd {
+						if splitAt == 0 || addr < splitAt {
+							splitAt = addr
+						}
+					}
+				}
+				if splitAt == 0 {
+					// No labels inside the remaining data region, emit it and break.
+					out.WriteString(analyzeAndFormatData(code[dataStart:dataEnd], dataStart, &stringCounter))
+					pc = dataEnd
+					break
+				}
+				// Debug: report that we will split data at this label.
+				// Emit data up to splitAt, then emit the label, then loop to handle
+				// remaining data after the label.
+				out.WriteString(analyzeAndFormatData(code[dataStart:splitAt], dataStart, &stringCounter))
+				lt := labelTargets[splitAt]
+				ln := labelName(splitAt, lt)
+				if !printedLabels[ln] {
+					fmt.Fprintf(&out, "%s:\n", ln)
+					printedLabels[ln] = true
+				}
+				// Advance dataStart to the label address and continue splitting.
+				dataStart = splitAt
+			}
 			continue
 		}
 
-		// It's a code instruction. Check if a label needs to be printed.
-		if labelType, exists := labelTargets[pc]; exists {
-			fmt.Fprintf(&out, "%s:\n", labelName(pc, labelType))
-		}
-
 		// Get the instruction and print it.
-		inst := instructions[pc]
 		finalOperands := inst.Operands
 		if isBranchMnemonic(inst.Mnemonic) || inst.Mnemonic == "jsr" {
 			offsetPC := inst.Address + 2
@@ -143,12 +201,38 @@ func Disassemble(code []byte) (string, error) {
 				target = int64(addr)
 			}
 			if target >= 0 {
-				if labelType, exists := labelTargets[uint32(target)]; exists {
-					finalOperands = labelName(uint32(target), labelType)
+				labelType := JumpTarget
+				targetAddr := uint32(target)
+				// Use the labelTargets map (populated during control-flow analysis)
+				// to determine the label type and render a label reference. This
+				// ensures branches reference emitted labels even if the target is in
+				// a data region.
+				if lt, exists := labelTargets[targetAddr]; exists {
+					labelType = lt
+				} else {
+					labelTargets[targetAddr] = labelType
+				}
+				finalOperands = labelName(targetAddr, labelType)
+				// If the target is the current PC, emit the label now so the
+				// assembler will see it when re-parsing this disassembly.
+				if targetAddr == pc {
+					ln := labelName(pc, labelType)
+					if !printedLabels[ln] {
+						fmt.Fprintf(&out, "%s:\n", ln)
+						printedLabels[ln] = true
+					}
 				}
 			}
 		}
 
+		// Normalize some operand forms for assembly compatibility. The decode
+		// routines return canonical forms used by unit tests; however the
+		// assembler parser is picky about certain EA syntaxes (notably MOVEP).
+		// Apply a final normalization pass just before printing to maximize
+		// round-trip success while keeping TestableDecode outputs unchanged.
+		if strings.HasPrefix(inst.Mnemonic, "movep") {
+			finalOperands = normalizeMovepForAssembly(finalOperands)
+		}
 		if finalOperands != "" {
 			fmt.Fprintf(&out, "    %-8s %s\n", inst.Mnemonic, finalOperands)
 		} else {
@@ -157,6 +241,27 @@ func Disassemble(code []byte) (string, error) {
 
 		// Advance PC by the size of this single instruction.
 		pc += inst.Size
+	}
+
+	// Emit any label targets that lie at or beyond the rendered range as
+	// trailing label declarations so forward references do not fail during
+	// re-assembly. This is conservative and does not change earlier offsets.
+	for addr, lt := range labelTargets {
+		if addr >= totalLen {
+			ln := labelName(addr, lt)
+			if !printedLabels[ln] {
+				fmt.Fprintf(&out, "%s:\n", ln)
+				printedLabels[ln] = true
+			}
+		}
+	}
+
+	// Debug: print which labels were emitted.
+	if len(printedLabels) > 0 {
+		fmt.Println("DEBUG: printedLabels:")
+		for ln := range printedLabels {
+			fmt.Printf("  %s\n", ln)
+		}
 	}
 
 	return out.String(), nil

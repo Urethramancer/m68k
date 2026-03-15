@@ -90,9 +90,9 @@ func decodeMovep(op uint16, pc int, code []byte) (string, string, int) {
 
 	var ops string
 	if isMemToReg {
-		ops = fmt.Sprintf("(%d,a%d),d%d", disp, addrReg, dataReg)
+		ops = fmt.Sprintf("(%s,a%d),d%d", formatDisp16(disp), addrReg, dataReg)
 	} else {
-		ops = fmt.Sprintf("d%d,(%d,a%d)", dataReg, disp, addrReg)
+		ops = fmt.Sprintf("d%d,(%s,a%d)", dataReg, formatDisp16(disp), addrReg)
 	}
 	return "movep" + sizeStr, ops, 2
 }
