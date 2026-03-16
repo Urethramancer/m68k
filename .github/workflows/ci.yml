@@ -21,7 +21,7 @@ jobs:
           - runner: ubuntu-latest
             goos: linux
             goarch: arm64
-          - runner: macos-13
+          - runner: macos-latest
             goos: darwin
             goarch: arm64
     steps:
