@@ -133,13 +133,13 @@ func TestLeaPeaLinkUnlk(t *testing.T) {
 
 	opLink := uint16(0x4E50) // link a0,#-4
 	code = []byte{0xFF, 0xFC}
-	mn, ops, _ = disassembler.Decode(opLink, 0, code)
+	mn, _, _ = disassembler.Decode(opLink, 0, code)
 	if mn != "link" {
 		t.Errorf("link failed: got %s", mn)
 	}
 
 	opUnlk := uint16(0x4E58) // unlk a0
-	mn, ops, _ = disassembler.Decode(opUnlk, 0, nil)
+	mn, _, _ = disassembler.Decode(opUnlk, 0, nil)
 	if mn != "unlk" {
 		t.Errorf("unlk failed: got %s", mn)
 	}
