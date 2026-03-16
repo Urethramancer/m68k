@@ -1,7 +1,6 @@
 package disassembler
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Urethramancer/m68k/assembler"
@@ -61,9 +60,6 @@ func TestRoundTripMovemMovepDirectives(t *testing.T) {
 		if err != nil {
 			t.Fatalf("re-assemble failed for disassembly:\n%s\nerr: %v", out, err)
 		}
-		// write blobs for debugging
-		_ = os.WriteFile("/tmp/roundtrip_orig.bin", bytes, 0644)
-		_ = os.WriteFile("/tmp/roundtrip_reasm.bin", bytes2, 0644)
 		if len(bytes) != len(bytes2) {
 			t.Fatalf("round-trip length mismatch for src:\n%s\norig=%d reasm=%d\nDisassembly:\n%s", src, len(bytes), len(bytes2), out)
 		}

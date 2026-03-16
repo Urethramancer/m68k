@@ -135,9 +135,67 @@ func Disassemble(code []byte) (string, error) {
 		}
 	}
 
+	// Recovery pass: find decoded instructions that follow code-marked
+	// instructions but were never reached (e.g. dead code after unconditional
+	// branches). Seed them into the queue and run another round of analysis.
+	// This avoids treating valid decoded instructions as raw data bytes.
+	changed := true
+	for changed {
+		changed = false
+		for addr, inst := range instructions {
+			if inst.IsCode {
+				continue
+			}
+			// Check if a code-marked instruction precedes this one
+			// (i.e. this instruction starts right after a known code instruction ends).
+			predecessor := false
+			for _, other := range instructions {
+				if other.IsCode && other.Address+other.Size == addr {
+					predecessor = true
+					break
+				}
+			}
+			if !predecessor {
+				continue
+			}
+			// Mark as code and propagate
+			inst.IsCode = true
+			changed = true
+
+			if !isTerminal(inst.Mnemonic) {
+				nextAddr := addr + inst.Size
+				if nextInst, ok := instructions[nextAddr]; ok && !nextInst.IsCode {
+					// Will be caught in next iteration
+					_ = nextInst
+				}
+			}
+
+			if isBranchMnemonic(inst.Mnemonic) || inst.Mnemonic == "jsr" || inst.Mnemonic == "bsr" {
+				offsetPC := inst.Address + 2
+				var target int64 = -1
+				if isBranchMnemonic(inst.Mnemonic) {
+					offset := parseBranchOffset(inst.Operands)
+					target = int64(offsetPC) + int64(offset)
+				}
+				if a := parseAbsoluteAddress(inst.Operands); a >= 0 {
+					target = int64(a)
+				}
+				if target >= 0 {
+					targetAddr := uint32(target)
+					if _, exists := labelTargets[targetAddr]; !exists {
+						if inst.Mnemonic == "jsr" || inst.Mnemonic == "bsr" {
+							labelTargets[targetAddr] = SubroutineEntry
+						} else {
+							labelTargets[targetAddr] = JumpTarget
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// --- STAGE 3: Render Final Output ---
 	var out strings.Builder
-	stringCounter := 1
 	pc := uint32(0)
 	totalLen := uint32(len(code))
 	printedLabels := make(map[string]bool)
@@ -159,7 +217,7 @@ func Disassemble(code []byte) (string, error) {
 			dataStart := pc
 			dataEnd := dataStart
 			for dataEnd < totalLen {
-				if _, exists := instructions[dataEnd]; exists {
+				if inst, exists := instructions[dataEnd]; exists && inst.IsCode {
 					break
 				}
 				dataEnd++
@@ -179,14 +237,14 @@ func Disassemble(code []byte) (string, error) {
 				}
 				if splitAt == 0 {
 					// No labels inside the remaining data region, emit it and break.
-					out.WriteString(analyzeAndFormatData(code[dataStart:dataEnd], dataStart, &stringCounter))
+					out.WriteString(analyzeAndFormatData(code[dataStart:dataEnd]))
 					pc = dataEnd
 					break
 				}
 				// Debug: report that we will split data at this label.
 				// Emit data up to splitAt, then emit the label, then loop to handle
 				// remaining data after the label.
-				out.WriteString(analyzeAndFormatData(code[dataStart:splitAt], dataStart, &stringCounter))
+				out.WriteString(analyzeAndFormatData(code[dataStart:splitAt]))
 				lt := labelTargets[splitAt]
 				ln := labelName(splitAt, lt)
 				if !printedLabels[ln] {
@@ -264,14 +322,6 @@ func Disassemble(code []byte) (string, error) {
 				fmt.Fprintf(&out, "%s:\n", ln)
 				printedLabels[ln] = true
 			}
-		}
-	}
-
-	// Debug: print which labels were emitted.
-	if len(printedLabels) > 0 {
-		fmt.Println("DEBUG: printedLabels:")
-		for ln := range printedLabels {
-			fmt.Printf("  %s\n", ln)
 		}
 	}
 

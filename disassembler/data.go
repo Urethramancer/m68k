@@ -9,106 +9,71 @@ import (
 func isPrintableASCII(b byte) bool {
 	return b >= 0x20 && b <= 0x7E
 }
-func analyzeAndFormatData(data []byte, baseAddr uint32, stringCounter *int) string {
-	var sb strings.Builder
-	n := len(data)
-	if n == 0 {
+
+// analyzeAndFormatData emits a data region as dc.b hex byte directives.
+func analyzeAndFormatData(data []byte) string {
+	if len(data) == 0 {
 		return ""
 	}
-
-	i := 0
-	minStrLen := 4
-
-	for i < n {
-		// Skip non-printables first
-		start := i
-		for start < n && !isPrintableASCII(data[start]) {
-			start++
-		}
-		if start > i {
-			sb.WriteString(formatHexBytes(data[i:start]))
-		}
-
-		// Find printable run
-		end := start
-		for end < n && isPrintableASCII(data[end]) {
-			end++
-		}
-		if end <= start {
-			i = start
-			continue
-		}
-
-		run := data[start:end]
-		runAddr := baseAddr + uint32(start)
-		isNullTerminated := end < n && data[end] == 0x00
-
-		// Rule 1: printable + NUL ≥ 4 chars → string (CONSERVATIVE MODE: emit as explicit bytes)
-		if isNullTerminated && len(run) >= minStrLen {
-			label := fmt.Sprintf("string%d:", *stringCounter)
-			(*stringCounter)++
-			// Emit as explicit hex bytes to guarantee round-trip fidelity.
-			sb.WriteString(fmt.Sprintf("%-8s", label))
-			sb.WriteString(formatHexBytes(run))
-			// emit the terminating NUL as an explicit byte
-			sb.WriteString(formatHexBytes([]byte{0x00}))
-			i = end + 1
-			continue
-		}
-
-		// Rule 2: 4-byte aligned, 4 printable chars → tag (emit as explicit bytes)
-		if len(run) == 4 && allPrintable(run) && runAddr%4 == 0 {
-			label := fmt.Sprintf("string%d:", *stringCounter)
-			(*stringCounter)++
-			sb.WriteString(fmt.Sprintf("%-8s", label))
-			sb.WriteString(formatHexBytes(run))
-			i = end
-			continue
-		}
-
-		// Rule 3: anything else, emit as hex
-		sb.WriteString(formatHexBytes(run))
-		i = end
-	}
-
-	return sb.String()
+	return formatHexBytes(data)
 }
 
-// allPrintable reports whether all bytes are standard printable ASCII.
-func allPrintable(b []byte) bool {
-	for _, c := range b {
-		if !isPrintableASCII(c) {
-			return false
-		}
-	}
-	return true
-}
-
-// formatHexBytes formats a slice of bytes into `dc.b` directives, 16 bytes per line.
+// formatHexBytes formats a slice of bytes into dc.b directives, 16 bytes per
+// line. Each line is guaranteed to contain an even number of bytes so that the
+// assembler's automatic dc.b even-padding doesn't insert unwanted zeros.
 func formatHexBytes(data []byte) string {
 	if len(data) == 0 {
 		return ""
 	}
 
-	var sb strings.Builder
 	const bytesPerLine = 16
+	var sb strings.Builder
 
-	for i := 0; i < len(data); i += bytesPerLine {
-		end := i + bytesPerLine
-		if end > len(data) {
-			end = len(data)
-		}
-		chunk := data[i:end]
-
-		sb.WriteString("    dc.b    ")
-		for j, b := range chunk {
-			if j > 0 {
-				sb.WriteString(",")
+	// Fast path: total byte count is even — every 16-byte chunk is even and
+	// the last chunk (≤16 bytes) is also even.
+	if len(data)%2 == 0 {
+		for i := 0; i < len(data); i += bytesPerLine {
+			end := i + bytesPerLine
+			if end > len(data) {
+				end = len(data)
 			}
-			sb.WriteString(fmt.Sprintf("$%02x", b))
+			writeHexLine(&sb, data[i:end])
 		}
-		sb.WriteString("\n")
+		return sb.String()
+	}
+
+	// Odd total: emit full 16-byte lines, then split the tail into two
+	// even-length lines so no single dc.b has an odd byte count.
+	i := 0
+	remaining := len(data)
+	for remaining > bytesPerLine {
+		writeHexLine(&sb, data[i:i+bytesPerLine])
+		i += bytesPerLine
+		remaining -= bytesPerLine
+	}
+	// remaining ≤ 16 and is odd. Split into even + odd-1 (both even).
+	if remaining > 1 {
+		split := remaining/2*2 // largest even ≤ remaining
+		writeHexLine(&sb, data[i:i+split])
+		if split < remaining {
+			writeHexLine(&sb, data[i+split:i+remaining])
+		}
+	} else {
+		// Single byte — unavoidable; assembler will pad.
+		writeHexLine(&sb, data[i:i+remaining])
 	}
 
 	return sb.String()
+}
+
+// writeHexLine writes a single "    dc.b    $NN,$NN,...\n" line.
+func writeHexLine(sb *strings.Builder, chunk []byte) {
+	sb.WriteString("    dc.b    ")
+	for j, b := range chunk {
+		if j > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(sb, "$%02x", b)
+	}
+	sb.WriteByte('\n')
 }
