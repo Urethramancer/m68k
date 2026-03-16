@@ -262,6 +262,35 @@ func Disassemble(code []byte) (string, error) {
 			continue
 		}
 
+		// Collapse consecutive ori.b #0,d0 instructions (opcode $0000 $0000,
+		// 4 bytes each) into ds.l / ds.w directives. These are decoded as
+		// valid instructions but almost certainly represent zero-filled
+		// storage (BSS-style), not real code.
+		if inst.Mnemonic == "ori.b" && inst.Operands == "#0,d0" && inst.Size == 4 {
+			count := uint32(0)
+			scanPC := pc
+			for scanPC < totalLen {
+				si, ok := instructions[scanPC]
+				if !ok || !si.IsCode || si.Mnemonic != "ori.b" || si.Operands != "#0,d0" || si.Size != 4 {
+					break
+				}
+				// Stop at label boundaries so labels remain addressable.
+				if count > 0 {
+					if _, hasLabel := labelTargets[scanPC]; hasLabel {
+						break
+					}
+				}
+				count++
+				scanPC += si.Size
+			}
+			if count >= 2 {
+				totalBytes := count * 4
+				out.WriteString(formatZeroRun(int(totalBytes)))
+				pc = scanPC
+				continue
+			}
+		}
+
 		// Get the instruction and print it.
 		finalOperands := inst.Operands
 		if isBranchMnemonic(inst.Mnemonic) || inst.Mnemonic == "jsr" {

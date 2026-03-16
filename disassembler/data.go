@@ -10,12 +10,71 @@ func isPrintableASCII(b byte) bool {
 	return b >= 0x20 && b <= 0x7E
 }
 
-// analyzeAndFormatData emits a data region as dc.b hex byte directives.
+// analyzeAndFormatData emits a data region. Runs of zero bytes are collapsed
+// into ds.l, ds.w or ds.b directives; non-zero bytes are emitted as dc.b hex.
 func analyzeAndFormatData(data []byte) string {
 	if len(data) == 0 {
 		return ""
 	}
-	return formatHexBytes(data)
+
+	var sb strings.Builder
+	i := 0
+	for i < len(data) {
+		// Count consecutive zero bytes starting at i.
+		zeroStart := i
+		for i < len(data) && data[i] == 0 {
+			i++
+		}
+		zeroLen := i - zeroStart
+		if zeroLen > 0 {
+			sb.WriteString(formatZeroRun(zeroLen))
+			continue
+		}
+
+		// Count consecutive non-zero (or mixed) bytes until the next
+		// zero run worth collapsing (4+ zeros).
+		nonZeroStart := i
+		for i < len(data) {
+			// Look ahead for a collapsible zero run.
+			if data[i] == 0 {
+				j := i
+				for j < len(data) && data[j] == 0 {
+					j++
+				}
+				if j-i >= 4 {
+					break // Let the zero-run handler pick this up.
+				}
+				i = j // Short zero run — include in non-zero chunk.
+			} else {
+				i++
+			}
+		}
+		sb.WriteString(formatHexBytes(data[nonZeroStart:i]))
+	}
+	return sb.String()
+}
+
+// formatZeroRun emits the most compact ds.X directive for a run of n zero
+// bytes. Prefers ds.l when longword-aligned, then ds.w, then ds.b.
+func formatZeroRun(n int) string {
+	if n == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	if n >= 4 {
+		longs := n / 4
+		fmt.Fprintf(&sb, "    ds.l    %d\n", longs)
+		n -= longs * 4
+	}
+	if n >= 2 {
+		words := n / 2
+		fmt.Fprintf(&sb, "    ds.w    %d\n", words)
+		n -= words * 2
+	}
+	if n > 0 {
+		fmt.Fprintf(&sb, "    ds.b    %d\n", n)
+	}
+	return sb.String()
 }
 
 // formatHexBytes formats a slice of bytes into dc.b directives, 16 bytes per
