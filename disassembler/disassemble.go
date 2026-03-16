@@ -294,6 +294,10 @@ func Disassemble(code []byte) (string, error) {
 			}
 		}
 
+		// Resolve PC-relative operands to labels. The displacement in
+		// (disp,pc) encodes target = instruction_address + 2 + disp.
+		finalOperands = resolvePCRelativeOperands(finalOperands, inst.Address, labelTargets)
+
 		// Normalize some operand forms for assembly compatibility. The decode
 		// routines return canonical forms used by unit tests; however the
 		// assembler parser is picky about certain EA syntaxes (notably MOVEP).

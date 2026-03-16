@@ -3,6 +3,7 @@ package disassembler
 import (
 	"encoding/binary"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -295,4 +296,31 @@ func normalizeMovepForAssembly(s string) string {
 		}
 	}
 	return out
+}
+
+// rePCRelDisp matches the (disp,pc) form emitted by DecodeEA for PC-relative
+// addressing mode 7/2. Captures the signed decimal displacement.
+var rePCRelDisp = regexp.MustCompile(`\((-?\d+),pc\)`)
+
+// resolvePCRelativeOperands replaces (disp,pc) operand forms with bare label
+// references. For each match the absolute target is computed as
+// instruction_address + 2 + disp, a label is registered if needed, and the
+// PC-relative text is replaced with just the label name. The assembler
+// automatically selects PC-relative encoding for bare labels when it fits.
+func resolvePCRelativeOperands(operands string, instrAddr uint32, labels map[uint32]LabelType) string {
+	return rePCRelDisp.ReplaceAllStringFunc(operands, func(m string) string {
+		sub := rePCRelDisp.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return m
+		}
+		var disp int64
+		fmt.Sscanf(sub[1], "%d", &disp)
+		target := uint32(int64(instrAddr) + 2 + disp)
+		lt, exists := labels[target]
+		if !exists {
+			lt = JumpTarget
+			labels[target] = lt
+		}
+		return labelName(target, lt)
+	})
 }
