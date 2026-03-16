@@ -189,8 +189,10 @@ func readImmediateBySize(code []byte, pc int, size uint16) (string, int) {
 	return "#?", 0
 }
 
-// TestableDecode is a wrapper around decode for testing purposes.
-func TestableDecode(op uint16, pc int, code []byte) (string, string, int) {
+// Decode decodes a single MC68000 opcode word and returns the mnemonic,
+// operand string, and the number of extension bytes consumed. The code slice
+// should contain any bytes following the opcode word.
+func Decode(op uint16, pc int, code []byte) (string, string, int) {
 	return decode(op, pc, code)
 }
 
@@ -260,7 +262,7 @@ func Hexdump(data []byte) {
 
 // normalizeMovepForAssembly rewrites movep operand text into a form the
 // assembler's parser accepts. The disassembler uses canonical forms for
-// TestableDecode, but the final rendering needs slight tweaks for round-trip
+// Decode, but the final rendering needs slight tweaks for round-trip
 // assembly.
 func normalizeMovepForAssembly(s string) string {
 	// Handle two common shapes:

@@ -76,7 +76,11 @@ func parseBranchOffset(tok string) int32 {
 	if tok == "" {
 		return 0
 	}
-	if strings.HasPrefix(tok, "loc_") {
+	// DBcc operands have the form "Dn,disp" — extract the displacement.
+	if comma := strings.IndexByte(tok, ','); comma >= 0 {
+		tok = strings.TrimSpace(tok[comma+1:])
+	}
+	if strings.HasPrefix(tok, "loc_") || strings.HasPrefix(tok, "sub_") {
 		return 0
 	}
 	if tok[0] == '+' {

@@ -8,7 +8,7 @@ import (
 )
 
 // assembleLogical handles AND, OR, EOR, and NOT instructions.
-func (asm *Assembler) assembleLogical(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleLogical(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "and", "andi":
 		return asm.assembleAnd(mn, operands)
@@ -23,7 +23,7 @@ func (asm *Assembler) assembleLogical(mn Mnemonic, operands []Operand) ([]uint16
 }
 
 // assembleLogicalImmediate is a helper for ANDI, ORI, and EORI.
-func (asm *Assembler) assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, src, dst Operand) ([]uint16, error) {
+func (asm *assembler) assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, src, dst Operand) ([]uint16, error) {
 	opword, err := setOpwordSize(baseOpcode, mn.Size, SizeBitsSingleOp)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func (asm *Assembler) assembleLogicalImmediate(baseOpcode uint16, mn Mnemonic, s
 	return words, nil
 }
 
-func (asm *Assembler) assembleAnd(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleAnd(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("AND requires 2 operands")
 	}
@@ -82,7 +82,7 @@ func (asm *Assembler) assembleAnd(mn Mnemonic, operands []Operand) ([]uint16, er
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-func (asm *Assembler) assembleOr(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleOr(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("OR requires 2 operands")
 	}
@@ -119,7 +119,7 @@ func (asm *Assembler) assembleOr(mn Mnemonic, operands []Operand) ([]uint16, err
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-func (asm *Assembler) assembleEor(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleEor(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("EOR requires 2 operands")
 	}
@@ -162,7 +162,7 @@ func (asm *Assembler) assembleEor(mn Mnemonic, operands []Operand) ([]uint16, er
 	return append([]uint16{opword}, eaExt...), nil
 }
 
-func (asm *Assembler) assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleNot(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("NOT requires 1 operand")
 	}

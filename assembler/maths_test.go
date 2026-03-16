@@ -7,7 +7,7 @@ import (
 )
 
 func TestAdd_QuickImmediate(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	mn := Mnemonic{Value: "add", Size: cpu.SizeWord}
 	op1 := Operand{Raw: "#4", Mode: cpu.ModeOther, Register: cpu.RegImmediate}
 	op2 := Operand{Mode: cpu.ModeData, Register: 2}
@@ -21,7 +21,7 @@ func TestAdd_QuickImmediate(t *testing.T) {
 }
 
 func TestAddI_ImmediateSizeWord(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	mn := Mnemonic{Value: "addi", Size: cpu.SizeWord}
 	op1 := Operand{Raw: "#$1234", Mode: cpu.ModeOther, Register: cpu.RegImmediate}
 	op2 := Operand{Mode: cpu.ModeAddr, Register: 1}
@@ -35,7 +35,7 @@ func TestAddI_ImmediateSizeWord(t *testing.T) {
 }
 
 func TestAddA_AddressRegister(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	mn := Mnemonic{Value: "adda", Size: cpu.SizeLong}
 	op1 := Operand{Mode: cpu.ModeData, Register: 3}
 	op2 := Operand{Mode: cpu.ModeAddr, Register: 2}
@@ -49,7 +49,7 @@ func TestAddA_AddressRegister(t *testing.T) {
 }
 
 func TestMulDiv_SizeChecks(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// MUL word allowed
 	mn := Mnemonic{Value: "muls", Size: cpu.SizeWord}
 	op1 := Operand{Mode: cpu.ModeAddrInd, Register: 0}

@@ -7,7 +7,7 @@ import (
 )
 
 func TestEncodeEA_ImmediateSizes(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// Byte immediate
 	op := Operand{Raw: "#$7F", Mode: cpu.ModeOther, Register: cpu.ModeImmediate}
 	w, exts, err := asm.encodeEA(op, cpu.SizeByte)
@@ -41,7 +41,7 @@ func TestEncodeEA_ImmediateSizes(t *testing.T) {
 }
 
 func TestShiftRotate_RegisterImmediateEncoding(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	mn := Mnemonic{Value: "asl", Size: cpu.SizeWord}
 	op1 := Operand{Raw: "#2", Mode: cpu.ModeOther, Register: cpu.RegImmediate}
 	op2 := Operand{Mode: cpu.ModeData, Register: 3}
@@ -55,7 +55,7 @@ func TestShiftRotate_RegisterImmediateEncoding(t *testing.T) {
 }
 
 func TestShiftRotate_MemoryFormEncoding(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	mn := Mnemonic{Value: "lsl", Size: cpu.SizeWord}
 	op := Operand{Mode: cpu.ModeAddrInd, Register: 0}
 	words, err := asm.assembleShiftRotate(mn, []Operand{op})
@@ -68,7 +68,7 @@ func TestShiftRotate_MemoryFormEncoding(t *testing.T) {
 }
 
 func TestBitManipulation_ImmediateAndRegister(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// Immediate form
 	mn := Mnemonic{Value: "btst"}
 	op1 := Operand{Raw: "#1", Mode: cpu.ModeOther, Register: cpu.RegImmediate}

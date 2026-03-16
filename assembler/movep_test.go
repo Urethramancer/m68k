@@ -7,7 +7,7 @@ import (
 )
 
 func TestMovep_RegisterToMemory(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	src := Operand{Mode: cpu.ModeData, Register: 2}
 	dst := Operand{Mode: cpu.ModeAddrDisp, Register: 3, ExtensionWords: []uint16{0x0010}}
 	mn := Mnemonic{Value: "movep", Size: cpu.SizeWord}
@@ -21,7 +21,7 @@ func TestMovep_RegisterToMemory(t *testing.T) {
 }
 
 func TestMovep_MemoryToRegister_LongSize(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	src := Operand{Mode: cpu.ModeAddrDisp, Register: 1, ExtensionWords: []uint16{0xFFFE}}
 	dst := Operand{Mode: cpu.ModeData, Register: 0}
 	mn := Mnemonic{Value: "movep", Size: cpu.SizeLong}

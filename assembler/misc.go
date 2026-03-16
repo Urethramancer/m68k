@@ -7,7 +7,7 @@ import (
 	"github.com/Urethramancer/m68k/cpu"
 )
 
-func (asm *Assembler) assembleMisc(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMisc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "exg":
 		return asm.assembleExg(operands)
@@ -23,7 +23,7 @@ func (asm *Assembler) assembleMisc(mn Mnemonic, operands []Operand) ([]uint16, e
 }
 
 // STOP
-func (asm *Assembler) assembleStop(operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleStop(operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("STOP requires one immediate operand")
 	}
@@ -38,7 +38,7 @@ func (asm *Assembler) assembleStop(operands []Operand) ([]uint16, error) {
 }
 
 // RESET / NOP / ILLEGAL
-func (asm *Assembler) assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 0 {
 		return nil, fmt.Errorf("%s requires no operands", strings.ToUpper(mn.Value))
 	}
@@ -55,7 +55,7 @@ func (asm *Assembler) assembleMiscNoOp(mn Mnemonic, operands []Operand) ([]uint1
 }
 
 // EXG
-func (asm *Assembler) assembleExg(operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleExg(operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("EXG requires 2 operands")
 	}
@@ -80,7 +80,7 @@ func (asm *Assembler) assembleExg(operands []Operand) ([]uint16, error) {
 }
 
 // One-operand instructions
-func (asm *Assembler) assembleMiscOneOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMiscOneOp(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("%s requires 1 operand", strings.ToUpper(mn.Value))
 	}

@@ -8,7 +8,7 @@ import (
 // getDirectiveSize calculates the byte size of a directive for the sizing pass.
 //
 // Note: pc is passed so .even can be sized correctly.
-func (asm *Assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
+func (asm *assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
 	// normalize directive: lowercase, drop an optional leading dot
 	raw := strings.ToLower(n.Parts[0])
 	dir := strings.TrimPrefix(raw, ".")
@@ -49,7 +49,7 @@ func (asm *Assembler) getDirectiveSize(n *Node, pc uint32) (uint32, error) {
 
 // generateDirectiveCode generates the binary data for assembler directives.
 // Returns a byte slice, as directives like DC.B are not always word-aligned.
-func (asm *Assembler) generateDirectiveCode(n *Node) ([]byte, error) {
+func (asm *assembler) generateDirectiveCode(n *Node) ([]byte, error) {
 	// Normalize directive name once: lowercase, no leading dot.
 	raw := strings.ToLower(n.Parts[0])
 	dir := strings.TrimPrefix(raw, ".")
@@ -88,7 +88,7 @@ func (asm *Assembler) generateDirectiveCode(n *Node) ([]byte, error) {
 }
 
 // calculateDcSize determines the byte size of a .dc directive's data.
-func (asm *Assembler) calculateDcSize(directive, values string) (uint32, error) {
+func (asm *assembler) calculateDcSize(directive, values string) (uint32, error) {
 	elementSize := getElementSize(directive)
 	var size uint32
 
@@ -116,7 +116,7 @@ func (asm *Assembler) calculateDcSize(directive, values string) (uint32, error) 
 // directives.go
 
 // assembleDc generates machine data for DC.B/DC.W/DC.L.
-func (asm *Assembler) assembleDc(directive, values string) ([]byte, error) {
+func (asm *assembler) assembleDc(directive, values string) ([]byte, error) {
 	elementSize := int(getElementSize(directive))
 	var bytesBuf []byte
 

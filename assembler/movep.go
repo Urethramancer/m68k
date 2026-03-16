@@ -13,7 +13,7 @@ import (
 //	MOVEP d(An), Dx   ; Memory → Register
 //
 // Only supports address-displacement modes (d16,An).
-func (asm *Assembler) assembleMovep(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMovep(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("MOVEP requires 2 operands")
 	}

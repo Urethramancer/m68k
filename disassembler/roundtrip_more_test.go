@@ -24,11 +24,9 @@ func TestRoundTripMovemMovepDirectives(t *testing.T) {
 		".org 0\n.dc.b \"This is a test string.\", 0xDE, 0xAD, 0xBE, 0xEF\n.even\n.dc.w 0x1234, 42\n",
 	}
 
-	asm := assembler.New()
-	reAsm := assembler.New()
 
 	for _, src := range cases {
-		bytes, err := asm.Assemble(src, 0)
+		bytes, err := assembler.Assemble(src, 0)
 		if err != nil {
 			t.Fatalf("assemble failed for src:\n%s\nerr: %v", src, err)
 		}
@@ -56,7 +54,7 @@ func TestRoundTripMovemMovepDirectives(t *testing.T) {
 			cleaned += line[i:] + "\n"
 		}
 
-		bytes2, err := reAsm.Assemble(cleaned, 0)
+		bytes2, err := assembler.Assemble(cleaned, 0)
 		if err != nil {
 			t.Fatalf("re-assemble failed for disassembly:\n%s\nerr: %v", out, err)
 		}

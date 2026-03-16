@@ -8,7 +8,7 @@ import (
 )
 
 // isQuickImmediate checks if an operand is an immediate value between 1 and 8.
-func (asm *Assembler) isQuickImmediate(src Operand) bool {
+func (asm *assembler) isQuickImmediate(src Operand) bool {
 	if !src.IsImmediate() {
 		return false
 	}
@@ -17,7 +17,7 @@ func (asm *Assembler) isQuickImmediate(src Operand) bool {
 }
 
 // assembleMath handles all integer arithmetic instructions.
-func (asm *Assembler) assembleMath(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMath(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "add", "adda", "addq", "addi":
 		return asm.assembleAdd(mn, operands)
@@ -36,16 +36,16 @@ func (asm *Assembler) assembleMath(mn Mnemonic, operands []Operand) ([]uint16, e
 }
 
 // assembleAdd and assembleSub are now simple wrappers for the merged helper function.
-func (asm *Assembler) assembleAdd(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleAdd(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	return asm.assembleAddSub(mn, operands, true)
 }
 
-func (asm *Assembler) assembleSub(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleSub(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	return asm.assembleAddSub(mn, operands, false)
 }
 
 // assembleAddSub is a merged helper for both ADD and SUB variants.
-func (asm *Assembler) assembleAddSub(mn Mnemonic, operands []Operand, isAdd bool) ([]uint16, error) {
+func (asm *assembler) assembleAddSub(mn Mnemonic, operands []Operand, isAdd bool) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
@@ -159,7 +159,7 @@ func (asm *Assembler) assembleAddSub(mn Mnemonic, operands []Operand, isAdd bool
 	return append([]uint16{opword}, ext...), nil
 }
 
-func (asm *Assembler) assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
@@ -189,7 +189,7 @@ func (asm *Assembler) assembleAddxSubx(mn Mnemonic, operands []Operand) ([]uint1
 	return []uint16{opword}, nil
 }
 
-func (asm *Assembler) assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMul(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("MUL requires 2 operands (<ea>, Dn)")
 	}
@@ -218,7 +218,7 @@ func (asm *Assembler) assembleMul(mn Mnemonic, operands []Operand) ([]uint16, er
 	return append([]uint16{opword}, ext...), nil
 }
 
-func (asm *Assembler) assembleDiv(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleDiv(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("DIV requires 2 operands (<ea>, Dn)")
 	}

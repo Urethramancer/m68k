@@ -8,8 +8,7 @@ import (
 
 func TestRoundTripSimple(t *testing.T) {
 	src := "move.l d0,d1\naddq.w #1,d1\n"
-	asm := assembler.New()
-	bytes, err := asm.Assemble(src, 0)
+	bytes, err := assembler.Assemble(src, 0)
 	if err != nil {
 		t.Fatalf("assemble failed: %v", err)
 	}
@@ -36,8 +35,7 @@ func TestRoundTripSimple(t *testing.T) {
 		}
 		cleaned += line[i:] + "\n"
 	}
-	reAsm := assembler.New()
-	bytes2, err := reAsm.Assemble(cleaned, 0)
+	bytes2, err := assembler.Assemble(cleaned, 0)
 	if err != nil {
 		t.Fatalf("re-assemble failed: %v\nDisassembly:\n%s", err, out)
 	}

@@ -1,8 +1,13 @@
+// Package disassembler converts flat MC68000 big-endian machine code into
+// readable assembly source. It performs control-flow analysis to separate code
+// from data, emits labels for branch targets and subroutine entry points, and
+// resolves PC-relative references to label names.
 package disassembler
 
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Urethramancer/m68k/cpu"
@@ -262,6 +267,7 @@ func Disassemble(code []byte) (string, error) {
 		if isBranchMnemonic(inst.Mnemonic) || inst.Mnemonic == "jsr" {
 			offsetPC := inst.Address + 2
 			var target int64 = -1
+			isDbcc := strings.HasPrefix(inst.Mnemonic, "db")
 			if isBranchMnemonic(inst.Mnemonic) {
 				offset := parseBranchOffset(inst.Operands)
 				target = int64(offsetPC) + int64(offset)
@@ -281,7 +287,17 @@ func Disassemble(code []byte) (string, error) {
 				} else {
 					labelTargets[targetAddr] = labelType
 				}
-				finalOperands = labelName(targetAddr, labelType)
+				lbl := labelName(targetAddr, labelType)
+				if isDbcc {
+					// DBcc has "Dn,disp" — preserve the register, replace the displacement.
+					if comma := strings.IndexByte(inst.Operands, ','); comma >= 0 {
+						finalOperands = inst.Operands[:comma+1] + lbl
+					} else {
+						finalOperands = lbl
+					}
+				} else {
+					finalOperands = lbl
+				}
 				// If the target is the current PC, emit the label now so the
 				// assembler will see it when re-parsing this disassembly.
 				if targetAddr == pc {
@@ -302,7 +318,7 @@ func Disassemble(code []byte) (string, error) {
 		// routines return canonical forms used by unit tests; however the
 		// assembler parser is picky about certain EA syntaxes (notably MOVEP).
 		// Apply a final normalization pass just before printing to maximize
-		// round-trip success while keeping TestableDecode outputs unchanged.
+		// round-trip success while keeping Decode outputs unchanged.
 		if strings.HasPrefix(inst.Mnemonic, "movep") {
 			finalOperands = normalizeMovepForAssembly(finalOperands)
 		}
@@ -330,6 +346,16 @@ func Disassemble(code []byte) (string, error) {
 	}
 
 	return out.String(), nil
+}
+
+// DisassembleFile reads a flat binary file and returns its disassembly. It is
+// a convenience wrapper around Disassemble.
+func DisassembleFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return Disassemble(data)
 }
 
 // isTerminal checks if an instruction unconditionally stops linear execution.

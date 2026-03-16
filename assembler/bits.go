@@ -31,7 +31,7 @@ var BitwiseSize = map[cpu.Size]uint16{
 //
 
 // assembleBitwise handles all shift, rotate, and bit manipulation instructions.
-func (asm *Assembler) assembleBitwise(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleBitwise(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "asl", "asr", "lsl", "lsr", "rol", "ror":
 		return asm.assembleShiftRotate(mn, operands)
@@ -51,7 +51,7 @@ func (asm *Assembler) assembleBitwise(mn Mnemonic, operands []Operand) ([]uint16
 //
 //	Register form: <op> #imm,Dy  or  <op> Dx,Dy
 //	Memory form:   <op> <ea>     (always word-sized)
-func (asm *Assembler) assembleShiftRotate(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleShiftRotate(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	opword := uint16(cpu.OPShiftRotateBase)
 	mnLower := strings.ToLower(mn.Value)
 	opword |= ShiftRotateType[mnLower]
@@ -110,7 +110,7 @@ func (asm *Assembler) assembleShiftRotate(mn Mnemonic, operands []Operand) ([]ui
 //
 
 // assembleBitManipulation handles BTST, BCHG, BCLR, BSET.
-func (asm *Assembler) assembleBitManipulation(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleBitManipulation(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", mn.Value)
 	}

@@ -25,7 +25,7 @@ func TestSimpleInstructions(t *testing.T) {
 		{cpu.OPTRAPV, "trapv"},
 	}
 	for _, tt := range tests {
-		mn, _, _ := disassembler.TestableDecode(tt.op, 0, nil)
+		mn, _, _ := disassembler.Decode(tt.op, 0, nil)
 		if mn != tt.want {
 			t.Errorf("got %s, want %s", mn, tt.want)
 		}
@@ -35,7 +35,7 @@ func TestSimpleInstructions(t *testing.T) {
 // MOVEQ
 func TestMoveQ(t *testing.T) {
 	op := uint16(0x7010) // moveq #16,d0
-	mn, ops, _ := disassembler.TestableDecode(op, 0, nil)
+	mn, ops, _ := disassembler.Decode(op, 0, nil)
 	if mn != "moveq" || ops != "#16,d0" {
 		t.Errorf("moveq failed: got %s %s", mn, ops)
 	}
@@ -46,7 +46,7 @@ func TestMoveGeneral(t *testing.T) {
 	op := uint16(0x303C) // move.w #$1234,d0
 	code := make([]byte, 2)
 	binary.BigEndian.PutUint16(code, 0x1234)
-	mn, ops, _ := disassembler.TestableDecode(op, 0, code)
+	mn, ops, _ := disassembler.Decode(op, 0, code)
 	if mn != "move.w" {
 		t.Errorf("expected move.w, got %s", mn)
 	}
@@ -60,19 +60,19 @@ func TestAddSubCmp(t *testing.T) {
 	code := make([]byte, 4)
 
 	opAdd := uint16(0xD040) // add.w d0,d0
-	mn, ops, _ := disassembler.TestableDecode(opAdd, 0, code)
+	mn, ops, _ := disassembler.Decode(opAdd, 0, code)
 	if mn != "add.w" || ops != "d0,d0" {
 		t.Errorf("add.w failed: got %s %s", mn, ops)
 	}
 
 	opSub := uint16(0x9441) // sub.w d1,d2
-	mn, ops, _ = disassembler.TestableDecode(opSub, 0, code)
+	mn, ops, _ = disassembler.Decode(opSub, 0, code)
 	if mn != "sub.w" || ops != "d1,d2" {
 		t.Errorf("sub.w failed: got %s %s", mn, ops)
 	}
 
 	opCmp := uint16(0xB042) // cmp.w d2,d2
-	mn, ops, _ = disassembler.TestableDecode(opCmp, 0, code)
+	mn, ops, _ = disassembler.Decode(opCmp, 0, code)
 	if mn != "cmp.w" {
 		t.Errorf("cmp.w failed: got %s %s", mn, ops)
 	}
@@ -81,13 +81,13 @@ func TestAddSubCmp(t *testing.T) {
 // ADDQ / SUBQ
 func TestAddqSubq(t *testing.T) {
 	opAddq := uint16(0x5080) // addq.l #8,d0
-	mn, ops, _ := disassembler.TestableDecode(opAddq, 0, nil)
+	mn, ops, _ := disassembler.Decode(opAddq, 0, nil)
 	if mn != "addq.l" || ops != "#8,d0" {
 		t.Errorf("addq failed: got '%s %s', want 'addq.l #8,d0'", mn, ops)
 	}
 
 	opSubq := uint16(0x5183) // subq.l #8,d3
-	mn, ops, _ = disassembler.TestableDecode(opSubq, 0, nil)
+	mn, ops, _ = disassembler.Decode(opSubq, 0, nil)
 	if mn != "subq.l" || ops != "#8,d3" {
 		t.Errorf("subq failed: got '%s %s', want 'subq.l #8,d3'", mn, ops)
 	}
@@ -99,7 +99,7 @@ func TestMovem(t *testing.T) {
 	// Register mask for d0-d5, which is 0x003F
 	code := []byte{0x00, 0x3F}
 
-	mn, ops, used := disassembler.TestableDecode(op, 0, code)
+	mn, ops, used := disassembler.Decode(op, 0, code)
 
 	wantMnemonic := "movem.l"
 	wantOps := "d0-d5,-(a7)"
@@ -120,26 +120,26 @@ func TestMovem(t *testing.T) {
 func TestLeaPeaLinkUnlk(t *testing.T) {
 	opLea := uint16(0x41FA) // lea (d16,pc),a0
 	code := []byte{0x00, 0x10}
-	mn, ops, _ := disassembler.TestableDecode(opLea, 0, code)
+	mn, ops, _ := disassembler.Decode(opLea, 0, code)
 	if mn != "lea" {
 		t.Errorf("lea failed: %s", mn)
 	}
 
 	opPea := uint16(0x4850) // pea (a0)
-	mn, ops, _ = disassembler.TestableDecode(opPea, 0, nil)
+	mn, ops, _ = disassembler.Decode(opPea, 0, nil)
 	if mn != "pea" {
 		t.Errorf("pea failed: got %s %s", mn, ops)
 	}
 
 	opLink := uint16(0x4E50) // link a0,#-4
 	code = []byte{0xFF, 0xFC}
-	mn, ops, _ = disassembler.TestableDecode(opLink, 0, code)
+	mn, ops, _ = disassembler.Decode(opLink, 0, code)
 	if mn != "link" {
 		t.Errorf("link failed: got %s", mn)
 	}
 
 	opUnlk := uint16(0x4E58) // unlk a0
-	mn, ops, _ = disassembler.TestableDecode(opUnlk, 0, nil)
+	mn, ops, _ = disassembler.Decode(opUnlk, 0, nil)
 	if mn != "unlk" {
 		t.Errorf("unlk failed: got %s", mn)
 	}
@@ -160,7 +160,7 @@ func TestImmediateLogicals(t *testing.T) {
 		{0x0C40, "cmpi.w"},
 	}
 	for _, tt := range tests {
-		mn, _, _ := disassembler.TestableDecode(tt.op, 0, code)
+		mn, _, _ := disassembler.Decode(tt.op, 0, code)
 		if mn != tt.want {
 			t.Errorf("expected %s, got %s", tt.want, mn)
 		}
@@ -188,7 +188,7 @@ func TestLogicalRegister(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, nil)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, nil)
 		if mn != tt.want || ops != tt.ops {
 			t.Errorf("op 0x%04X: got '%s %s', want '%s %s'", tt.op, mn, ops, tt.want, tt.ops)
 		}
@@ -228,7 +228,7 @@ func TestSingleOperandInstructions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, nil)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, nil)
 		if mn != tt.want || ops != tt.ops {
 			t.Errorf("op 0x%04X: got '%s %s', want '%s %s'", tt.op, mn, ops, tt.want, tt.ops)
 		}
@@ -251,7 +251,7 @@ func TestBranches(t *testing.T) {
 		{0x6F10, "ble"},
 	}
 	for _, b := range branches {
-		mn, _, _ := disassembler.TestableDecode(b.op, 0, nil)
+		mn, _, _ := disassembler.Decode(b.op, 0, nil)
 		if mn != b.want {
 			t.Errorf("expected %s, got %s", b.want, mn)
 		}
@@ -270,7 +270,7 @@ func TestShiftRotate(t *testing.T) {
 		{0xE158, "rol.w"},
 	}
 	for _, tt := range tests {
-		mn, _, _ := disassembler.TestableDecode(tt.op, 0, nil)
+		mn, _, _ := disassembler.Decode(tt.op, 0, nil)
 		if mn != tt.want {
 			t.Errorf("expected %s, got %s", tt.want, mn)
 		}
@@ -299,7 +299,7 @@ func TestBitManipulation(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, tt.code)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, tt.code)
 		if mn != tt.want || ops != tt.ops {
 			t.Errorf("op 0x%04X: got '%s %s', want '%s %s'", tt.op, mn, ops, tt.want, tt.ops)
 		}
@@ -322,7 +322,7 @@ func TestJmpJsr(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, tt.code)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, tt.code)
 		full := mn
 		if ops != "" {
 			full += " " + ops
@@ -351,7 +351,7 @@ func TestSccDbcc(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, code)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, code)
 		full := mn
 		if ops != "" {
 			full += " " + ops
@@ -375,7 +375,7 @@ func TestCmpm(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, nil)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, nil)
 		if mn != tt.want || ops != tt.ops {
 			t.Errorf("op 0x%04x: got '%s %s', want '%s %s'", tt.op, mn, ops, tt.want, tt.ops)
 		}
@@ -403,7 +403,7 @@ func TestExtExg(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, nil)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, nil)
 		if mn != tt.want || ops != tt.ops {
 			t.Errorf("op 0x%04X: got '%s %s', want '%s %s'", tt.op, mn, ops, tt.want, tt.ops)
 		}
@@ -429,7 +429,7 @@ func TestMovep(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		mn, ops, _ := disassembler.TestableDecode(tt.op, 0, tt.code)
+		mn, ops, _ := disassembler.Decode(tt.op, 0, tt.code)
 		if mn != tt.want || ops != tt.ops {
 			t.Errorf("op 0x%04X: got '%s %s', want '%s %s'", tt.op, mn, ops, tt.want, tt.ops)
 		}
@@ -438,7 +438,6 @@ func TestMovep(t *testing.T) {
 
 // TestSystemInstructions tests system-level instructions like TAS.
 func TestSystemInstructions(t *testing.T) {
-	asm := assembler.New()
 	tests := []string{
 		// TAS
 		"tas d0",
@@ -449,7 +448,7 @@ func TestSystemInstructions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			code, err := asm.Assemble(tt, 0)
+			code, err := assembler.Assemble(tt, 0)
 			if err != nil {
 				t.Fatalf("Failed to assemble '%s': %v", tt, err)
 			}
@@ -460,7 +459,7 @@ func TestSystemInstructions(t *testing.T) {
 				ext = code[2:]
 			}
 
-			mn, ops, _ := disassembler.TestableDecode(op, 0, ext)
+			mn, ops, _ := disassembler.Decode(op, 0, ext)
 			result := mn
 			if ops != "" {
 				result += " " + ops
@@ -475,7 +474,6 @@ func TestSystemInstructions(t *testing.T) {
 
 // TestPrivilegedImmediate tests immediate operations on CCR and SR.
 func TestPrivilegedImmediate(t *testing.T) {
-	asm := assembler.New()
 	tests := []string{
 		"andi #16,ccr",
 		"ori #4,ccr",
@@ -487,7 +485,7 @@ func TestPrivilegedImmediate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			code, err := asm.Assemble(tt, 0)
+			code, err := assembler.Assemble(tt, 0)
 			if err != nil {
 				t.Fatalf("Failed to assemble '%s': %v", tt, err)
 			}
@@ -498,7 +496,7 @@ func TestPrivilegedImmediate(t *testing.T) {
 				ext = code[2:]
 			}
 
-			mn, ops, _ := disassembler.TestableDecode(op, 0, ext)
+			mn, ops, _ := disassembler.Decode(op, 0, ext)
 			result := mn
 			if ops != "" {
 				result += " " + ops
@@ -513,7 +511,6 @@ func TestPrivilegedImmediate(t *testing.T) {
 
 // TestMoveSystemRegisters tests MOVE to/from SR, CCR, and USP.
 func TestMoveSystemRegisters(t *testing.T) {
-	asm := assembler.New()
 	tests := []string{
 		"move sr,d0",
 		"move d1,ccr",
@@ -524,7 +521,7 @@ func TestMoveSystemRegisters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			code, err := asm.Assemble(tt, 0)
+			code, err := assembler.Assemble(tt, 0)
 			if err != nil {
 				t.Fatalf("Failed to assemble '%s': %v", tt, err)
 			}
@@ -535,7 +532,7 @@ func TestMoveSystemRegisters(t *testing.T) {
 				ext = code[2:]
 			}
 
-			mn, ops, _ := disassembler.TestableDecode(op, 0, ext)
+			mn, ops, _ := disassembler.Decode(op, 0, ext)
 			result := mn
 			if ops != "" {
 				result += " " + ops

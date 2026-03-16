@@ -8,7 +8,7 @@ import (
 )
 
 // assembleAddressMode handles LEA and PEA instructions.
-func (asm *Assembler) assembleAddressMode(mn Mnemonic, operands []Operand, pc uint32) ([]uint16, error) {
+func (asm *assembler) assembleAddressMode(mn Mnemonic, operands []Operand, pc uint32) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "lea":
 		return asm.assembleLea(operands)
@@ -20,7 +20,7 @@ func (asm *Assembler) assembleAddressMode(mn Mnemonic, operands []Operand, pc ui
 }
 
 // assembleLea is now much simpler.
-func (asm *Assembler) assembleLea(operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleLea(operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("LEA requires 2 operands")
 	}
@@ -42,7 +42,7 @@ func (asm *Assembler) assembleLea(operands []Operand) ([]uint16, error) {
 }
 
 // assemblePea is also simplified.
-func (asm *Assembler) assemblePea(operands []Operand) ([]uint16, error) {
+func (asm *assembler) assemblePea(operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("PEA requires 1 operand")
 	}

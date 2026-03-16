@@ -7,7 +7,7 @@ import (
 )
 
 func TestTrap_ValidAndInvalid(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// Valid vector
 	_, err := asm.assembleTrapImmediate([]Operand{{Raw: "#5", Mode: cpu.ModeOther, Register: cpu.RegImmediate, ExtensionWords: []uint16{5}}})
 	if err != nil {

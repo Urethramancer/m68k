@@ -69,8 +69,7 @@ func main() {
 	}
 
 	fmt.Printf("Read %d bytes of source code.\n", count)
-	asm := assembler.New()
-	code, err := asm.Assemble(string(src.String()), 0)
+	code, err := assembler.Assemble(src.String(), 0)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Assembly error: %v\n", err)
 		os.Exit(1)

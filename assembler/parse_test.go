@@ -5,7 +5,7 @@ import (
 )
 
 func TestParseAddressIndex_OutOfRange(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	_, err := asm.parseAddressIndex([]string{"128(a0,d1.w)", "128", "0", "d", "1", "w"})
 	if err == nil {
 		t.Fatalf("expected error for out-of-range index displacement")
@@ -13,7 +13,7 @@ func TestParseAddressIndex_OutOfRange(t *testing.T) {
 }
 
 func TestParsePCRelIndex_OutOfRange(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	_, err := asm.parsePCRelIndex([]string{"128(pc,d1.w)", "128", "d", "1", "w"})
 	if err == nil {
 		t.Fatalf("expected error for out-of-range pc-index displacement")
@@ -21,7 +21,7 @@ func TestParsePCRelIndex_OutOfRange(t *testing.T) {
 }
 
 func TestParseConstant_CharEscapes(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	v, err := asm.parseConstant("'\\n'")
 	if err != nil || v != int64('\n') {
 		t.Fatalf("expected newline char, got %v err=%v", v, err)
@@ -37,7 +37,7 @@ func TestParseConstant_CharEscapes(t *testing.T) {
 }
 
 func TestTryParseImmediate_SizeSelection(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	op, ok, err := asm.tryParseImmediateMode("#$12345")
 	if err != nil || !ok {
 		t.Fatalf("expected immediate parsed, got err=%v ok=%v", err, ok)

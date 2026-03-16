@@ -7,7 +7,7 @@ import (
 )
 
 func TestMisc_Exg_Swap_Ext_Tas_Stop_Reset(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// EXG D0,D1
 	_, err := asm.assembleExg([]Operand{{Mode: cpu.ModeData, Register: 0}, {Mode: cpu.ModeData, Register: 1}})
 	if err != nil {

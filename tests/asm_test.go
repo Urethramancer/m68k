@@ -19,8 +19,8 @@ func assembleAndMatchHex(t *testing.T, name, src, expectedHex string) {
 		t.Fatalf("[%s] invalid expected hex string: %v", name, err)
 	}
 
-	asm := assembler.New()
-	code, err := asm.Assemble(src, 0x1000)
+	
+	code, err := assembler.Assemble(src, 0x1000)
 	if err != nil {
 		t.Fatalf("[%s] failed to assemble:\n%s\nerror: %v", name, src, err)
 	}

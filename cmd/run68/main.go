@@ -64,15 +64,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("Couldn't read source file: %v", err)
 		}
-		asm := assembler.New()
-		// For assembly, the ORG directive determines the load address.
-		// We pass 0 and let the assembler figure it out.
-		code, err = asm.Assemble(string(sourceBytes), 0)
+		code, err = assembler.Assemble(string(sourceBytes), 0)
 		if err != nil {
 			log.Fatalf("Assembly failed: %v", err)
 		}
-		// The assembler sets the PC to the ORG address.
-		startAddress = asm.BaseAddress()
+		startAddress = 0
 		v.LoadCode(startAddress, code)
 
 	case ".bin", ".m68":

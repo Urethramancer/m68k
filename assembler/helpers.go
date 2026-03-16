@@ -49,7 +49,7 @@ func setOpwordSize(opword uint16, size cpu.Size, sizeMap map[cpu.Size]uint16) (u
 // Note: parseConstant accepts single-quoted character literals (with simple escapes) and numeric
 // formats like $hex, 0xhex, %binary. Passing op.Raw may include a leading '#'; parseConstant will
 // strip it as needed.
-func (asm *Assembler) encodeEA(op Operand, size cpu.Size) (uint16, []uint16, error) {
+func (asm *assembler) encodeEA(op Operand, size cpu.Size) (uint16, []uint16, error) {
 	var word uint16
 	var exts []uint16
 

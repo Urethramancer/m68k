@@ -8,7 +8,7 @@ import (
 )
 
 // assembleStatus handles instructions involving SR, CCR, and USP.
-func (asm *Assembler) assembleStatus(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleStatus(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) == 0 {
 		return nil, fmt.Errorf("%s requires at least one operand", strings.ToUpper(mn.Value))
 	}
@@ -78,7 +78,7 @@ func (asm *Assembler) assembleStatus(mn Mnemonic, operands []Operand) ([]uint16,
 }
 
 // MOVE <ea>, SR
-func (asm *Assembler) assembleMoveToSr(src Operand) ([]uint16, error) {
+func (asm *assembler) assembleMoveToSr(src Operand) ([]uint16, error) {
 	eaBits, eaExt, err := asm.encodeEA(src, cpu.SizeWord)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (asm *Assembler) assembleMoveToSr(src Operand) ([]uint16, error) {
 }
 
 // MOVE <ea>, CCR
-func (asm *Assembler) assembleMoveToCcr(src Operand) ([]uint16, error) {
+func (asm *assembler) assembleMoveToCcr(src Operand) ([]uint16, error) {
 	eaBits, eaExt, err := asm.encodeEA(src, cpu.SizeWord)
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func (asm *Assembler) assembleMoveToCcr(src Operand) ([]uint16, error) {
 }
 
 // MOVE SR, <ea>
-func (asm *Assembler) assembleMoveFromSr(dst Operand) ([]uint16, error) {
+func (asm *assembler) assembleMoveFromSr(dst Operand) ([]uint16, error) {
 	eaBits, eaExt, err := asm.encodeEA(dst, cpu.SizeWord)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (asm *Assembler) assembleMoveFromSr(dst Operand) ([]uint16, error) {
 }
 
 // MOVE CCR, <ea>
-func (asm *Assembler) assembleMoveFromCcr(dst Operand) ([]uint16, error) {
+func (asm *assembler) assembleMoveFromCcr(dst Operand) ([]uint16, error) {
 	eaBits, eaExt, err := asm.encodeEA(dst, cpu.SizeWord)
 	if err != nil {
 		return nil, err

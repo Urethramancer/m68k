@@ -5,21 +5,37 @@ import (
 	"os"
 
 	"github.com/Urethramancer/m68k/disassembler"
+	"github.com/grimdork/climate/arg"
 )
 
 func main() {
-	if len(os.Args) < 2 || len(os.Args) > 3 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <inputfile> [outputfile]\n", os.Args[0])
+	opt := arg.New("dis68")
+	opt.SetDefaultHelp(true)
+	err := opt.SetPositional("INPUT", "Binary file to disassemble.", "", true, arg.VarString)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error setting positional argument: %v\n", err)
 		os.Exit(1)
 	}
 
-	var fn string
-	if len(os.Args) == 3 {
-		fn = os.Args[2]
+	err = opt.SetOption(arg.GroupDefault, "o", "out", "Write disassembly to file (default: stdout).", "", false, arg.VarString, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error setting option: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Read the binary file directly. Do NOT modify it.
-	code, err := os.ReadFile(os.Args[1])
+	err = opt.Parse(os.Args[1:])
+	if err != nil {
+		if err == arg.ErrNoArgs {
+			opt.PrintHelp()
+			return
+		}
+
+		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
+		os.Exit(1)
+	}
+
+	input := opt.GetPosString("INPUT")
+	code, err := os.ReadFile(input)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading input file: %v\n", err)
 		os.Exit(1)
@@ -31,7 +47,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// If an output file is specified, run the disassembler and write to it.
+	fn := opt.GetString("out")
 	if fn != "" {
 		if err := os.WriteFile(fn, []byte(text), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
@@ -41,5 +57,5 @@ func main() {
 		return
 	}
 
-	println(text)
+	fmt.Print(text)
 }

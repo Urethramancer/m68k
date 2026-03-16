@@ -9,7 +9,7 @@ import (
 )
 
 // assembleMovem assembles MOVEM instructions.
-func (asm *Assembler) assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("MOVEM requires 2 operands")
 	}
@@ -37,7 +37,7 @@ func (asm *Assembler) assembleMovem(mn Mnemonic, operands []Operand) ([]uint16, 
 }
 
 // Store form: MOVEM <reglist>, <ea>
-func (asm *Assembler) assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
+func (asm *assembler) assembleMovemStore(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
 	regmask, err := parseMovemList(src.Raw)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (asm *Assembler) assembleMovemStore(src Operand, dst Operand, sz cpu.Size) 
 }
 
 // Load form: MOVEM <ea>, <reglist>
-func (asm *Assembler) assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
+func (asm *assembler) assembleMovemLoad(src Operand, dst Operand, sz cpu.Size) ([]uint16, error) {
 	regmask, err := parseMovemList(dst.Raw)
 	if err != nil {
 		return nil, err

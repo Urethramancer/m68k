@@ -7,7 +7,7 @@ import (
 )
 
 func TestAbcd_RegisterForm(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	op1 := Operand{Mode: cpu.ModeData, Register: 1}
 	op2 := Operand{Mode: cpu.ModeData, Register: 2}
 	words, err := asm.assembleAbcdSbcd(true, []Operand{op1, op2})
@@ -20,7 +20,7 @@ func TestAbcd_RegisterForm(t *testing.T) {
 }
 
 func TestAbcd_PreDecForm(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	op1 := Operand{Mode: cpu.ModeAddrPreDec, Register: 3}
 	op2 := Operand{Mode: cpu.ModeAddrPreDec, Register: 4}
 	words, err := asm.assembleAbcdSbcd(true, []Operand{op1, op2})
@@ -33,7 +33,7 @@ func TestAbcd_PreDecForm(t *testing.T) {
 }
 
 func TestNbcd_MemoryAndDataReg(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// memory operand
 	op := Operand{Mode: cpu.ModeAddrInd, Register: 0}
 	_, err := asm.assembleNbcd([]Operand{op})

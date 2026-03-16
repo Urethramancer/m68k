@@ -9,14 +9,14 @@ import (
 )
 
 // assembleMove handles MOVE, MOVEA, and MOVEQ instructions.
-func (asm *Assembler) assembleMove(mn Mnemonic, operands []Operand, pc uint32) ([]uint16, error) {
+func (asm *assembler) assembleMove(mn Mnemonic, operands []Operand, pc uint32) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("%s requires 2 operands", strings.ToUpper(mn.Value))
 	}
 	src, dst := operands[0], operands[1]
 
 	// MOVEQ
-	if asm.CanBeMoveq(mn, src, dst) {
+	if asm.canBeMoveq(mn, src, dst) {
 		val, _ := asm.parseConstant(src.Raw)
 		// MOVEQ only supports .L (explicit .W/.B should be rejected)
 		if mn.Size == cpu.SizeWord || mn.Size == cpu.SizeByte {
@@ -99,9 +99,9 @@ func (asm *Assembler) assembleMove(mn Mnemonic, operands []Operand, pc uint32) (
 	return words, nil
 }
 
-// CanBeMoveq checks if the instruction can be encoded as MOVEQ.
+// canBeMoveq checks if the instruction can be encoded as MOVEQ.
 // MOVEQ encodes an immediate signed 8-bit constant (-128..127) into a data register.
-func (asm *Assembler) CanBeMoveq(mn Mnemonic, src Operand, dst Operand) bool {
+func (asm *assembler) canBeMoveq(mn Mnemonic, src Operand, dst Operand) bool {
 	name := strings.ToLower(mn.Value)
 	if name != "move" && name != "moveq" {
 		return false

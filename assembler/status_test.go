@@ -7,7 +7,7 @@ import (
 )
 
 func TestMoveToFromSrCcrUsp(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// MOVE D0,SR
 	op := Operand{Mode: cpu.ModeData, Register: 0}
 	_, err := asm.assembleMoveToSr(op)

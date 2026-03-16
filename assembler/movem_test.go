@@ -46,7 +46,7 @@ func TestParseMovemList_CrossGroupError(t *testing.T) {
 }
 
 func TestAssembleMovemStore_PreDecReversal(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// Simulate MOVEM d0-d3, -(A7)
 	src := Operand{Raw: "d0-d3"}
 	dst := Operand{Raw: "-(a7)", Mode: cpu.ModeAddrPreDec, Register: 7}

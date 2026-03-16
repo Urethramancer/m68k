@@ -13,7 +13,7 @@ func TestDecodeMovep(t *testing.T) {
 	binary.BigEndian.PutUint16(code[0:], op)
 	// displacement 0x0010
 	binary.BigEndian.PutUint16(code[2:], 0x0010)
-	mn, ops, used := TestableDecode(op, 0, code[2:])
+	mn, ops, used := decode(op, 0, code[2:])
 	if mn != "movep" && mn != "movep.w" {
 		t.Fatalf("expected movep mnemonic, got %s", mn)
 	}

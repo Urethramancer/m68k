@@ -1,7 +1,10 @@
+// Package assembler implements a Motorola 68000 assembler that translates
+// assembly source text into flat big-endian machine code.
 package assembler
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Urethramancer/m68k/cpu"
@@ -14,8 +17,8 @@ const (
 	RegStatus = 0xFFFF
 )
 
-// Assembler holds the state for the assembly process.
-type Assembler struct {
+// assembler holds the internal state for a single assembly run.
+type assembler struct {
 	symbols     map[string]int64
 	labels      map[string]uint32
 	outputPos   uint32
@@ -23,21 +26,31 @@ type Assembler struct {
 	opSize      int // Current operation size in bytes
 }
 
-// BaseAddress returns the base address configured for code to load and start at.
-func (asm *Assembler) BaseAddress() uint32 {
-	return asm.baseAddress
-}
-
-// New creates a new Assembler instance.
-func New() *Assembler {
-	return &Assembler{
+func newAssembler() *assembler {
+	return &assembler{
 		symbols: make(map[string]int64),
 		labels:  make(map[string]uint32),
 	}
 }
 
-// Assemble takes M68k assembly code and returns the machine code.
-func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
+// Assemble takes MC68000 assembly source and a base address, and returns the
+// assembled machine code as a big-endian byte slice.
+func Assemble(src string, baseAddress uint32) ([]byte, error) {
+	asm := newAssembler()
+	return asm.assemble(src, baseAddress)
+}
+
+// AssembleFile reads the named source file and assembles it. It is a
+// convenience wrapper around Assemble.
+func AssembleFile(path string, baseAddress uint32) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return Assemble(string(data), baseAddress)
+}
+
+func (asm *assembler) assemble(src string, baseAddress uint32) ([]byte, error) {
 	asm.baseAddress = baseAddress
 	lines := strings.Split(strings.ReplaceAll(src, "\r\n", "\n"), "\n")
 	nodes, err := asm.parseLines(lines)
@@ -116,7 +129,7 @@ func (asm *Assembler) Assemble(src string, baseAddress uint32) ([]byte, error) {
 }
 
 // runSizingPass executes one sizing/label resolution pass and returns true if anything changed.
-func (asm *Assembler) runSizingPass(nodes []*Node) (bool, error) {
+func (asm *assembler) runSizingPass(nodes []*Node) (bool, error) {
 	pc := asm.baseAddress
 	changed := false
 
@@ -172,7 +185,7 @@ func (asm *Assembler) runSizingPass(nodes []*Node) (bool, error) {
 }
 
 // generateInstructionCode is the single source of truth for instruction binary generation.
-func (asm *Assembler) generateInstructionCode(n *Node, pc uint32, finalPass bool) ([]uint16, error) {
+func (asm *assembler) generateInstructionCode(n *Node, pc uint32, finalPass bool) ([]uint16, error) {
 	operands := make([]Operand, len(n.Operands))
 	copy(operands, n.Operands)
 
@@ -297,7 +310,7 @@ func isBranchMnemonic(val string) bool {
 	}
 }
 
-func (asm *Assembler) parseLines(lines []string) ([]*Node, error) {
+func (asm *assembler) parseLines(lines []string) ([]*Node, error) {
 	var nodes []*Node
 	for i, line := range lines {
 		if commentIndex := strings.IndexRune(line, ';'); commentIndex != -1 {

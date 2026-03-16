@@ -8,7 +8,7 @@ import (
 )
 
 // assembleBcd handles ABCD, SBCD, and NBCD instructions.
-func (asm *Assembler) assembleBcd(mn Mnemonic, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleBcd(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	switch strings.ToLower(mn.Value) {
 	case "abcd":
 		return asm.assembleAbcdSbcd(true, operands)
@@ -25,7 +25,7 @@ func (asm *Assembler) assembleBcd(mn Mnemonic, operands []Operand) ([]uint16, er
 // Encoding:
 //   - Register-to-register:  1100|Dst|1000|000|Src   (ABCD Dx,Dy / SBCD Dx,Dy)
 //   - Memory (predecrement): 1100|Dst|1000|001|Src   (ABCD -(Ax),-(Ay) / SBCD -(Ax),-(Ay))
-func (asm *Assembler) assembleAbcdSbcd(isAdd bool, operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleAbcdSbcd(isAdd bool, operands []Operand) ([]uint16, error) {
 	if len(operands) != 2 {
 		return nil, fmt.Errorf("ABCD/SBCD require 2 operands")
 	}
@@ -60,7 +60,7 @@ func (asm *Assembler) assembleAbcdSbcd(isAdd bool, operands []Operand) ([]uint16
 //
 //	0100 1000 00 | <EA>
 //	- Only supports memory destination or data register.
-func (asm *Assembler) assembleNbcd(operands []Operand) ([]uint16, error) {
+func (asm *assembler) assembleNbcd(operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
 		return nil, fmt.Errorf("NBCD requires 1 operand")
 	}

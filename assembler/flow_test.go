@@ -7,7 +7,7 @@ import (
 )
 
 func TestGetSizeBra_ShortVsWord(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	// Create node with no explicit size and a forward label
 	n := &Node{}
 	n.Mnemonic.Value = "bra"
@@ -34,7 +34,7 @@ func TestAssembleBra_OutOfRangeShort(t *testing.T) {
 }
 
 func TestAssembleDbcc_OutOfRange(t *testing.T) {
-	asm := New()
+	asm := newAssembler()
 	asm.labels = map[string]uint32{"loop": 70000}
 	_, err := asm.assembleDbcc(Mnemonic{Value: "dbne"}, []Operand{{Mode: cpu.ModeData, Register: 0}, {Raw: "loop"}}, asm.labels, 0)
 	if err == nil {
