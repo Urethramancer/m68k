@@ -69,21 +69,32 @@ func Disassemble(code []byte) (string, error) {
 
 		// Heuristic: if this address points into a long printable ASCII run, it's
 		// likely data. Skip marking it as code so the renderer will emit it as
-		// data instead of decoding instructions out of text.
+		// data instead of decoding instructions out of text. Tighten the heuristic
+		// to reduce false positives and avoid expensive long scans: require a
+		// longer printable run and ensure no decoded instruction starts inside
+		// the candidate run.
 		if int(addr) < len(code) {
 			printables := 0
-			for i := int(addr); i < len(code) && i < int(addr)+32; i++ {
+			maxScan := int(addr) + 32
+			if maxScan > len(code) {
+				maxScan = len(code)
+			}
+			for i := int(addr); i < maxScan; i++ {
 				b := code[i]
 				if b >= 32 && b <= 126 {
 					printables++
 				} else {
-					if printables >= 6 {
+					if printables >= 12 {
 						break
 					}
 					printables = 0
 				}
 			}
-			if printables >= 6 {
+			// Require at least 12 contiguous printable bytes to consider as data.
+			if printables >= 12 {
+				// Conservative: if we see a long printable run, prefer data even if
+				// a decoded instruction start exists inside the window. This avoids
+				// decoding ASCII as instructions which breaks round-trip fidelity.
 				continue
 			}
 		}

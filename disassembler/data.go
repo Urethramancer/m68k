@@ -43,22 +43,25 @@ func analyzeAndFormatData(data []byte, baseAddr uint32, stringCounter *int) stri
 		runAddr := baseAddr + uint32(start)
 		isNullTerminated := end < n && data[end] == 0x00
 
-		// Rule 1: printable + NUL ≥ 4 chars → string
+		// Rule 1: printable + NUL ≥ 4 chars → string (CONSERVATIVE MODE: emit as explicit bytes)
 		if isNullTerminated && len(run) >= minStrLen {
 			label := fmt.Sprintf("string%d:", *stringCounter)
 			(*stringCounter)++
-			escaped := strings.ReplaceAll(string(run), "'", "''")
-			sb.WriteString(fmt.Sprintf("%-8s dc.b    '%s',$00\n", label, escaped))
+			// Emit as explicit hex bytes to guarantee round-trip fidelity.
+			sb.WriteString(fmt.Sprintf("%-8s", label))
+			sb.WriteString(formatHexBytes(run))
+			// emit the terminating NUL as an explicit byte
+			sb.WriteString(formatHexBytes([]byte{0x00}))
 			i = end + 1
 			continue
 		}
 
-		// Rule 2: 4-byte aligned, 4 printable chars → tag
+		// Rule 2: 4-byte aligned, 4 printable chars → tag (emit as explicit bytes)
 		if len(run) == 4 && allPrintable(run) && runAddr%4 == 0 {
 			label := fmt.Sprintf("string%d:", *stringCounter)
 			(*stringCounter)++
-			escaped := strings.ReplaceAll(string(run), "'", "''")
-			sb.WriteString(fmt.Sprintf("%-8s dc.b    '%s'\n", label, escaped))
+			sb.WriteString(fmt.Sprintf("%-8s", label))
+			sb.WriteString(formatHexBytes(run))
 			i = end
 			continue
 		}

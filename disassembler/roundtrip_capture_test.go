@@ -1,7 +1,6 @@
 package disassembler
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,13 +15,13 @@ func TestRoundTripCaptureBlobs(t *testing.T) {
 		// try to assemble from the directive source if binary not present; fail otherwise
 		t.Skipf("original test blob not found: %v", err)
 	}
-	b, err := ioutil.ReadFile(origPath)
+	b, err := os.ReadFile(origPath)
 	if err != nil {
 		t.Fatalf("read orig: %v", err)
 	}
 	// write original
 	tmpOrig := "/tmp/roundtrip_orig.bin"
-	if err := ioutil.WriteFile(tmpOrig, b, 0644); err != nil {
+	if err := os.WriteFile(tmpOrig, b, 0644); err != nil {
 		t.Fatalf("write orig tmp: %v", err)
 	}
 	// Now run the package's round-trip routine if exposed; fallback: run TestRoundTripMovemMovepDirectives by calling it is not possible.
