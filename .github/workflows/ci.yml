@@ -6,10 +6,11 @@ on:
       - 'v*'
   pull_request:
     types: [closed]
+  workflow_dispatch: {}
 
 jobs:
   run-checks:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -45,15 +46,15 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Install golangci-lint (best-effort)
+      - name: Install staticcheck (best-effort)
         run: |
           set -e
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(pwd)/bin v1.59.0 || true
-          PATH="$(pwd)/bin:$PATH"
-      - name: Run golangci-lint (may fail)
+          go install honnef.co/go/tools/cmd/staticcheck@latest || true
+          PATH="$(go env GOPATH)/bin:$PATH"
+
+      - name: Run staticcheck (may fail)
         run: |
-          PATH="$(pwd)/bin:$PATH"
-          golangci-lint run ./... || echo "golangci-lint failed or not compatible; continuing"
+          staticcheck ./... || echo "staticcheck failed or not available; continuing"
 
       - name: Run tests with coverage
         run: |
@@ -62,8 +63,9 @@ jobs:
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-${{ matrix.goos }}-${{ matrix.goarch }}-${{ github.run_id }}
           path: coverage.out
+          overwrite: true
 
       - name: List tags (debug)
         run: git tag -n1 || true
