@@ -71,6 +71,9 @@ func ParseMnemonic(s string) (Mnemonic, error) {
 func (asm *Assembler) parseOperand(s string) (Operand, error) {
 	s = strings.TrimSpace(s)
 
+	// Normalise the SP alias to A7 so all register regexes match.
+	s = normaliseSP(s)
+
 	// Handle special registers first
 	if op, ok, err := tryParseStatusReg(s); ok || err != nil {
 		return op, err
@@ -133,6 +136,21 @@ func (asm *Assembler) tryParseIndexedModes(s string) (Operand, bool, error) {
 		return op, true, err
 	}
 	return Operand{}, false, nil
+}
+
+// normaliseSP replaces the SP alias with A7 in an operand string so that
+// register-matching regexes (which expect a[0-7]) work transparently.
+// Handles bare SP, (SP), (SP)+, -(SP), d16(SP), and indexed forms.
+var reSP = regexp.MustCompile(`(?i)\bsp\b`)
+
+func normaliseSP(s string) string {
+	return reSP.ReplaceAllStringFunc(s, func(m string) string {
+		// Preserve original case style: SP→A7, sp→a7, Sp→A7
+		if m[0] >= 'A' && m[0] <= 'Z' {
+			return "A7"
+		}
+		return "a7"
+	})
 }
 
 // tryParseRegisterModes handles Dn, An, (An), (An)+, -(An), and (d16,An).

@@ -134,6 +134,9 @@ func parseMovemList(list string) (uint16, error) {
 // Parse register name (e.g. "d0", "a6")
 func parseRegIndex(reg string) (int, error) {
 	reg = strings.TrimSpace(strings.ToLower(reg))
+	if reg == "sp" {
+		return 8 + 7, nil // SP is an alias for A7
+	}
 	if len(reg) < 2 {
 		return 0, fmt.Errorf("invalid register name: %s", reg)
 	}
