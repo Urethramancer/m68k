@@ -23,7 +23,6 @@ type assembler struct {
 	labels      map[string]uint32
 	outputPos   uint32
 	baseAddress uint32
-	opSize      int // Current operation size in bytes
 }
 
 func newAssembler() *assembler {

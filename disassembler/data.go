@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-// isPrintableASCII checks if a byte is a standard printable ASCII character.
-func isPrintableASCII(b byte) bool {
-	return b >= 0x20 && b <= 0x7E
-}
-
 // analyzeAndFormatData emits a data region. Runs of zero bytes are collapsed
 // into ds.l, ds.w or ds.b directives; non-zero bytes are emitted as dc.b hex.
 func analyzeAndFormatData(data []byte) string {

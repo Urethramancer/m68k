@@ -121,18 +121,18 @@ func assembleBra(mn Mnemonic, operands []Operand, labels map[string]uint32, pc u
 
 func (asm *assembler) assembleScc(mn Mnemonic, operands []Operand) ([]uint16, error) {
 	if len(operands) != 1 {
-		return nil, fmt.Errorf("Scc requires 1 operand")
+		return nil, fmt.Errorf("scc requires 1 operand")
 	}
 	dst := operands[0]
 
 	condStr := strings.ToLower(strings.TrimPrefix(mn.Value, "s"))
 	condCode, ok := cpu.ConditionCodes[condStr]
 	if !ok {
-		return nil, fmt.Errorf("unknown condition code '%s' for Scc", condStr)
+		return nil, fmt.Errorf("unknown condition code '%s' for scc", condStr)
 	}
 
 	if dst.Mode == cpu.ModeAddr {
-		return nil, fmt.Errorf("Scc destination cannot be an address register")
+		return nil, fmt.Errorf("scc destination cannot be an address register")
 	}
 
 	opword := uint16(cpu.OPScc)
@@ -146,12 +146,12 @@ func (asm *assembler) assembleScc(mn Mnemonic, operands []Operand) ([]uint16, er
 
 func (asm *assembler) assembleDbcc(mn Mnemonic, operands []Operand, labels map[string]uint32, pc uint32) ([]uint16, error) {
 	if len(operands) != 2 {
-		return nil, fmt.Errorf("DBcc requires 2 operands (Dn, label)")
+		return nil, fmt.Errorf("dbcc requires 2 operands (Dn, label)")
 	}
 	src, dst := operands[0], operands[1]
 
 	if src.Mode != cpu.ModeData {
-		return nil, fmt.Errorf("first operand of DBcc must be a data register")
+		return nil, fmt.Errorf("first operand of dbcc must be a data register")
 	}
 
 	condStr := strings.ToLower(strings.TrimPrefix(mn.Value, "db"))
@@ -161,7 +161,7 @@ func (asm *assembler) assembleDbcc(mn Mnemonic, operands []Operand, labels map[s
 
 	condCode, ok := cpu.ConditionCodes[condStr]
 	if !ok {
-		return nil, fmt.Errorf("unknown condition code '%s' for DBcc", condStr)
+		return nil, fmt.Errorf("unknown condition code '%s' for dbcc", condStr)
 	}
 
 	opword := uint16(cpu.OPDBcc)
@@ -176,7 +176,7 @@ func (asm *assembler) assembleDbcc(mn Mnemonic, operands []Operand, labels map[s
 
 	offset := int32(target) - int32(pc+2)
 	if offset < -32768 || offset > 32767 {
-		return nil, fmt.Errorf("branch target out of range for DBcc")
+		return nil, fmt.Errorf("branch target out of range for dbcc")
 	}
 
 	return []uint16{opword, uint16(offset & 0xFFFF)}, nil
