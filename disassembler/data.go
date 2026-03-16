@@ -112,7 +112,7 @@ func formatHexBytes(data []byte) string {
 	}
 	// remaining ≤ 16 and is odd. Split into even + odd-1 (both even).
 	if remaining > 1 {
-		split := remaining/2*2 // largest even ≤ remaining
+		split := remaining / 2 * 2 // largest even ≤ remaining
 		writeHexLine(&sb, data[i:i+split])
 		if split < remaining {
 			writeHexLine(&sb, data[i+split:i+remaining])

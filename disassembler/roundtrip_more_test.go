@@ -24,7 +24,6 @@ func TestRoundTripMovemMovepDirectives(t *testing.T) {
 		".org 0\n.dc.b \"This is a test string.\", 0xDE, 0xAD, 0xBE, 0xEF\n.even\n.dc.w 0x1234, 42\n",
 	}
 
-
 	for _, src := range cases {
 		bytes, err := assembler.Assemble(src, 0)
 		if err != nil {
