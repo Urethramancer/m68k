@@ -120,15 +120,15 @@ func TestMovem(t *testing.T) {
 func TestLeaPeaLinkUnlk(t *testing.T) {
 	opLea := uint16(0x41FA) // lea (d16,pc),a0
 	code := []byte{0x00, 0x10}
-	mn, ops, _ := disassembler.Decode(opLea, 0, code)
+	mn, _, _ := disassembler.Decode(opLea, 0, code)
 	if mn != "lea" {
 		t.Errorf("lea failed: %s", mn)
 	}
 
 	opPea := uint16(0x4850) // pea (a0)
-	mn, ops, _ = disassembler.Decode(opPea, 0, nil)
+	mn, _, _ = disassembler.Decode(opPea, 0, nil)
 	if mn != "pea" {
-		t.Errorf("pea failed: got %s %s", mn, ops)
+		t.Errorf("pea failed: got %s", mn)
 	}
 
 	opLink := uint16(0x4E50) // link a0,#-4
