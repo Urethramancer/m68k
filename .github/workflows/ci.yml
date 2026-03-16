@@ -24,6 +24,8 @@ jobs:
           - runner: macos-latest
             goos: darwin
             goarch: arm64
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,15 +48,15 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Install staticcheck (best-effort)
+      - name: Install staticcheck
         run: |
           set -e
-          go install honnef.co/go/tools/cmd/staticcheck@latest || true
+          go install honnef.co/go/tools/cmd/staticcheck@latest
           PATH="$(go env GOPATH)/bin:$PATH"
 
-      - name: Run staticcheck (may fail)
+      - name: Run staticcheck
         run: |
-          staticcheck ./... || echo "staticcheck failed or not available; continuing"
+          staticcheck ./...
 
       - name: Run tests with coverage
         run: |
