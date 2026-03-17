@@ -60,7 +60,7 @@ brews:
       owner: grimdork
       name: homebrew-tools
     commit_author:
-      name: grimdork
+      name: Grimdork
       email: github@grimdork.net
     homepage: "https://github.com/Urethramancer/m68k"
     description: "m68k assembler (asm68)"
