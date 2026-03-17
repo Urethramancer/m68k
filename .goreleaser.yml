@@ -46,9 +46,6 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
-snapshot:
-  name_template: "{{ .Tag }}-next"
-
 changelog:
   sort: asc
   filters:
@@ -56,11 +53,11 @@ changelog:
       - '^docs:'
       - '^test:'
 
-# Homebrew (v2 schema)
-brews:
+# Homebrew (updated schema)
+homebrew:
   - name: asm68
     repository:
-      owner: grimdork
+      owner: Urethramancer
       name: homebrew-tools
     commit_author:
       name: Urethramancer
