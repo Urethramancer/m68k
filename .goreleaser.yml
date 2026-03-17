@@ -53,8 +53,8 @@ changelog:
       - '^docs:'
       - '^test:'
 
-# Homebrew (updated schema)
-homebrew:
+# Homebrew (legacy brews schema)
+brews:
   - name: asm68
     repository:
       owner: Urethramancer
