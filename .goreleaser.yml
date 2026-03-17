@@ -60,7 +60,7 @@ changelog:
 brews:
   - name: asm68
     repository:
-      owner: Urethramancer
+      owner: grimdork
       name: homebrew-tools
     commit_author:
       name: Urethramancer
